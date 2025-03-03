@@ -1,0 +1,11 @@
+[project]
+name = "knir-8"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.2.3",
+    "pillow>=11.1.0",
+    "scikit-learn>=1.6.1",
+]
