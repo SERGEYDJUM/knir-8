@@ -46,7 +46,7 @@ def load_image(df: DataFrame, row_idx: int) -> NDArray:
     row = df.iloc[row_idx]
     raw_name = row["raw_source"]
     center = row["bbox_center_x"], row["bbox_center_y"]
-    radius = row["bbox_safe_r_x"], row["bbox_safe_r_x"]
+    radius = max(row["bbox_safe_r_x"], row["bbox_safe_r_x"])
 
     if raw_name not in image_cache:
         raw_path = path.join(DATASET_RAWS, raw_name)
@@ -55,10 +55,24 @@ def load_image(df: DataFrame, row_idx: int) -> NDArray:
 
     tomo_slice = image_cache[raw_name][row["slice_index"]]
 
+    center_shift = np.random.uniform(-radius / 5, radius / 5, 2)
+    radius = int(radius * 4 / 5)
+
+    center = (
+        int(center[0] + center_shift[0]),
+        int(center[1] + center_shift[1]),
+    )
+
     image = tomo_slice[
-        center[1] - radius[1] : center[1] + radius[1],
-        center[0] - radius[0] : center[0] + radius[0],
+        center[1] - radius : center[1] + radius,
+        center[0] - radius : center[0] + radius,
     ].copy()
+
+    if np.random.uniform(0, 1) > 0.5:
+        image = np.fliplr(image)
+
+    if np.random.uniform(0, 1) > 0.5:
+        image = np.flipud(image)
 
     image -= np.min(image)
     image *= 255 / np.max(image)
@@ -69,6 +83,7 @@ def load_image(df: DataFrame, row_idx: int) -> NDArray:
 def image_to_tk(imgarr: NDArray, scale: int = 5) -> ImageTk:
     image = np.kron(imgarr, np.ones((scale, scale)))
     image = Image.fromarray(image)
+
     return ImageTk.PhotoImage(image)
 
 

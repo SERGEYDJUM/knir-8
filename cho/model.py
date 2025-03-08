@@ -17,8 +17,7 @@ def _gabor_filter(x: int, y: int, f: float, w: float, theta: float) -> float:
 @dataclass
 class CHOChannelConfig:
     bands: tuple[tuple[float, float]] = (
-        # (3 / 256, 112.96),
-        # (3 / 128, 56.48),
+        (3 / 128, 56.48),
         (3 / 64, 28.24),
         (3 / 32, 14.12),
         (3 / 16, 7.06),

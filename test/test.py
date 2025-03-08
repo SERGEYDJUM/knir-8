@@ -7,14 +7,14 @@ import numpy as np
 
 def main():
     df, _ = load_dataset()
-    df = df[df["human_score"] != -1]
+    # df = df[df["human_score"] != -1]
     roi_radius = 50
 
     raws = {}
 
     X = np.zeros((df.shape[0], 100, 100), dtype=np.single)
     y = np.zeros(df.shape[0], dtype=np.bool)
-    hy = np.zeros(df.shape[0], dtype=np.bool)
+    # hy = np.zeros(df.shape[0], dtype=np.bool)
 
     for i, row in enumerate(df.itertuples()):
         raw_name = row.raw_source
@@ -30,11 +30,11 @@ def main():
         ]
 
         y[i] = row.signal_present
-        hy[i] = row.human_score
+        # hy[i] = row.human_score
 
-    model = CHO(channel_noise_std=8, test_stat_noise_std=32, _debug_mode=True)
+    model = CHO(channel_noise_std=8, test_stat_noise_std=6, _debug_mode=True)
     model.train(X[0::2, :, :], y[0::2])
 
     print("Template sum:", model.template.sum())
     print("Model:", model.measure(X[1::2], y[1::2]))
-    print("Human:", metrics.roc_auc_score(y, hy))
+    # print("Human:", metrics.roc_auc_score(y, hy))
