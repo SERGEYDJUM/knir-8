@@ -1,4 +1,6 @@
 .temp/
+dataset/*
+!dataset/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

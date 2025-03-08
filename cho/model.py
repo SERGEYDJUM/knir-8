@@ -17,8 +17,8 @@ def _gabor_filter(x: int, y: int, f: float, w: float, theta: float) -> float:
 @dataclass
 class CHOChannelConfig:
     bands: tuple[tuple[float, float]] = (
-        (3 / 256, 112.96),
-        (3 / 128, 56.48),
+        # (3 / 256, 112.96),
+        # (3 / 128, 56.48),
         (3 / 64, 28.24),
         (3 / 32, 14.12),
         (3 / 16, 7.06),
@@ -35,25 +35,22 @@ class CHO:
         channel_config: CHOChannelConfig | None = None,
         channel_freq_mul: float = 1,
         channel_width_mul: float = 1,
-        internal_noise_std: float = 0,
+        channel_noise_std: float = 0,
+        test_stat_noise_std: float = 0,
         _debug_mode: bool = False,
     ) -> None:
         self.ch_cfg = channel_config
-        self.ch_freq_mul = channel_freq_mul
-        self.ch_width_mul = channel_width_mul
-
-        self.noise_std = internal_noise_std
-
+        self.ch_noise_std = channel_noise_std
+        self.test_noise_std = test_stat_noise_std
         self._debug_mode = _debug_mode
+
+        if _debug_mode:
+            makedirs(".temp/channels", exist_ok=True)
 
         if self.ch_cfg is None:
             self.ch_cfg = CHOChannelConfig()
 
-        self.ch_cfg.adjust(self.ch_freq_mul, self.ch_width_mul)
-
-        if self._debug_mode:
-            makedirs(".temp/channels", exist_ok=True)
-            makedirs(".temp/responces", exist_ok=True)
+        self.ch_cfg.adjust(channel_freq_mul, channel_width_mul)
 
     def _build_channels(self, width: int, height: int) -> NDArray[np.float64]:
         thetas = [0, 45, 90, 135]
@@ -69,7 +66,7 @@ class CHO:
             channels[ci] = np.fromfunction(gabor_channel, (height, width))
 
             # Channel normalization
-            channels[ci] /= np.sqrt(np.sum(channels[ci] * channels[ci]))
+            channels[ci] /= np.sqrt((channels[ci] * channels[ci]).sum())
 
             if self._debug_mode:
                 ch_img = channels[ci] - channels[ci].min()
@@ -81,29 +78,36 @@ class CHO:
                 )
 
         self.channels = channels
+        return channels
 
     def train(self, X: NDArray[np.float64], y: NDArray[np.bool]) -> None:
-        self._build_channels(X.shape[2], X.shape[1])
+        channels = self._build_channels(X.shape[2], X.shape[1])
 
         X_p: NDArray = X[y]
         X_n: NDArray = X[np.logical_not(y)]
 
-        Nu_p = np.sum(self.channels[None, :, :, :] * X_p[:, None, :, :], axis=(2, 3))
-        Nu_n = np.sum(self.channels[None, :, :, :] * X_n[:, None, :, :], axis=(2, 3))
+        Nu_p = np.sum(channels[None, :, :, :] * X_p[:, None, :, :], axis=(2, 3))
+        Nu_p += np.random.normal(0, self.ch_noise_std, Nu_p.shape)
 
-        K = (np.cov(Nu_p, rowvar=False) + np.cov(Nu_n, rowvar=False)) / 2
+        Nu_n = np.sum(channels[None, :, :, :] * X_n[:, None, :, :], axis=(2, 3))
+        Nu_n += np.random.normal(0, self.ch_noise_std, Nu_n.shape)
+
+        U = channels.reshape((channels.shape[0], channels.shape[1] * channels.shape[2]))
+        X_p = X_p.reshape((X_p.shape[0], X_p.shape[1] * X_p.shape[2]))
+        X_n = X_n.reshape((X_n.shape[0], X_n.shape[1] * X_n.shape[2]))
+
+        K_nu_p = U @ (np.cov(X_p, rowvar=False) @ U.T)
+        K_nu_n = U @ (np.cov(X_n, rowvar=False) @ U.T)
+        K_nu = (K_nu_n + K_nu_p) / 2
         mean_nu = np.mean(Nu_p, axis=0) - np.mean(Nu_n, axis=0)
 
-        self.template = np.linalg.inv(K) @ mean_nu
+        self.template = np.linalg.inv(K_nu) @ mean_nu
 
     def test(self, X: NDArray[np.float64]) -> NDArray[np.float64]:
         responses = np.sum(self.channels[None, :, :, :] * X[:, None, :, :], axis=(2, 3))
+        responses += np.random.normal(0, self.ch_noise_std, responses.shape)
         t = np.sum(responses * self.template[np.newaxis, :], axis=1)
-
-        if np.isclose(self.noise_std, 0):
-            return t
-
-        return t + np.random.normal(0, self.noise_std, t.shape)
+        return t + np.random.normal(0, self.test_noise_std, t.shape)
 
     def measure(self, X: NDArray[np.float64], y: NDArray[np.bool]) -> float:
         return float(metrics.roc_auc_score(y, self.test(X)))
