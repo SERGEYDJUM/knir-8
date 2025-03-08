@@ -37,6 +37,7 @@ def load_dataset() -> tuple[DataFrame, list[int]]:
 
     unscored_indexes = csvdf.index[csvdf["human_score"] == -1].tolist()
     shuffle(unscored_indexes)
+    shuffle(unscored_indexes)
     return csvdf, unscored_indexes
 
 
@@ -55,13 +56,13 @@ def load_image(df: DataFrame, row_idx: int) -> NDArray:
 
     tomo_slice = image_cache[raw_name][row["slice_index"]]
 
-    center_shift = np.random.uniform(-radius / 5, radius / 5, 2)
-    radius = int(radius * 4 / 5)
+    # center_shift = np.random.uniform(-radius / 5, radius / 5, 2)
+    # radius = int(radius * 4 / 5)
 
-    center = (
-        int(center[0] + center_shift[0]),
-        int(center[1] + center_shift[1]),
-    )
+    # center = (
+    #     int(center[0] + center_shift[0]),
+    #     int(center[1] + center_shift[1]),
+    # )
 
     image = tomo_slice[
         center[1] - radius : center[1] + radius,
@@ -96,6 +97,10 @@ class App:
 
         self.csvdf, self.unscored_idxs = load_dataset()
         self.current_index = 0
+
+        if not self.unscored_idxs:
+            print("No images to label")
+            exit(0)
 
         self.next(reverse=True)
 
@@ -132,6 +137,9 @@ class App:
         if reverse:
             self.current_index = max(0, self.current_index - 1)
         else:
+            if self.current_index == len(self.unscored_idxs) - 1:
+                exit(0)
+
             self.current_index = min(
                 len(self.unscored_idxs) - 1, self.current_index + 1
             )

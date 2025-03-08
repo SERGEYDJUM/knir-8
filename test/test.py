@@ -7,14 +7,14 @@ import numpy as np
 
 def main():
     df, _ = load_dataset()
-    # df = df[df["human_score"] != -1]
+    df = df[df["human_score"] != -1]
     roi_radius = 50
 
     raws = {}
 
-    X = np.zeros((df.shape[0], 100, 100), dtype=np.single)
+    X = np.zeros((df.shape[0], roi_radius * 2, roi_radius * 2), dtype=np.single)
     y = np.zeros(df.shape[0], dtype=np.bool)
-    # hy = np.zeros(df.shape[0], dtype=np.bool)
+    hy = np.zeros(df.shape[0], dtype=np.bool)
 
     for i, row in enumerate(df.itertuples()):
         raw_name = row.raw_source
@@ -30,11 +30,24 @@ def main():
         ]
 
         y[i] = row.signal_present
-        # hy[i] = row.human_score
+        hy[i] = row.human_score
 
-    model = CHO(channel_noise_std=8, test_stat_noise_std=6, _debug_mode=True)
-    model.train(X[0::2, :, :], y[0::2])
+    model = CHO(channel_noise_std=4, test_stat_noise_std=17, _debug_mode=True)
+    # model.train(X[0::2, :, :], y[0::2])
+    model.train(X, y)
 
+    # print("Template:", model.template)
     print("Template sum:", model.template.sum())
-    print("Model:", model.measure(X[1::2], y[1::2]))
-    # print("Human:", metrics.roc_auc_score(y, hy))
+
+    measures = []
+    measures_cnt = 100
+    # X_test = X[1::2]
+    # y_test = y[1::2]
+    X_test = X
+    y_test = y
+
+    for i in range(measures_cnt):
+        measures.append(model.measure(X_test, y_test))
+
+    print("Model AUC:", sum(measures) / measures_cnt)
+    print("Human AUC:", metrics.roc_auc_score(y, hy))
