@@ -8,7 +8,8 @@ import numpy as np
 def main():
     df, _ = load_dataset()
     df = df[df["human_score"] != -1]
-    roi_radius = 50
+    roi_radius = 32
+    shift_r = 4
 
     raws = {}
 
@@ -24,6 +25,11 @@ def main():
             max_slice = df[df["raw_source"] == raw_name]["slice_index"].max()
             raws[raw_name] = rawread(raw_path, (max_slice + 1, 512, 512))
 
+        center = (
+            int(np.random.uniform(-shift_r, shift_r) + center[0]),
+            int(np.random.uniform(-shift_r, shift_r) + center[1]),
+        )
+
         X[i] = raws[raw_name][row.slice_index][
             center[1] - roi_radius : center[1] + roi_radius,
             center[0] - roi_radius : center[0] + roi_radius,
@@ -32,7 +38,7 @@ def main():
         y[i] = row.signal_present
         hy[i] = row.human_score
 
-    model = CHO(channel_noise_std=4, test_stat_noise_std=17, _debug_mode=True)
+    model = CHO(channel_noise_std=4, test_stat_noise_std=12, _debug_mode=True)
     # model.train(X[0::2, :, :], y[0::2])
     model.train(X, y)
 
