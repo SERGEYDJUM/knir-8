@@ -110,3 +110,21 @@ class CHO:
 
     def measure(self, X: NDArray[np.float64], y: NDArray[np.bool]) -> float:
         return float(metrics.roc_auc_score(y, self.test(X)))
+
+
+class CHOss(CHO):
+    def train(self, X: NDArray[np.float64], y: NDArray[np.bool]) -> None:
+        channels = self._build_channels(X.shape[2], X.shape[1])
+
+        X_n: NDArray = X[np.logical_not(y)]
+
+        Nu_n = np.sum(channels[None, :, :, :] * X_n[:, None, :, :], axis=(2, 3))
+        Nu_n += np.random.normal(0, self.ch_noise_std, Nu_n.shape)
+
+        U = channels.reshape((channels.shape[0], channels.shape[1] * channels.shape[2]))
+        X_n = X_n.reshape((X_n.shape[0], X_n.shape[1] * X_n.shape[2]))
+
+        K_nu_n = U @ (np.cov(X_n, rowvar=False) @ U.T)
+        mean_nu = np.mean(Nu_n, axis=0)
+
+        self.template = np.linalg.inv(K_nu_n) @ mean_nu

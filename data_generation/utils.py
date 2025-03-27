@@ -61,7 +61,9 @@ class LesionBBox:
     def roi_bbox(self, include_z: bool = False) -> tuple[tuple, tuple]:
         return self._bbox_3d(self.rr) if include_z else self._bbox_2d(self.rr)
 
-    def scale(self, scale_factor: float = 1.0, imcenter=(256, 256, 150)):
+    def scale(
+        self, scale_factor: float, old_im_center: tuple[int], new_im_center: tuple[int]
+    ):
         def scaler(x: int) -> int:
             return int(x * scale_factor)
 
@@ -69,9 +71,9 @@ class LesionBBox:
             return tuple(map(scaler, t))
 
         def recenter(t: tuple) -> tuple:
-            shifted = map(lambda p: p[1] - p[0], zip(imcenter, self.center))
+            shifted = map(lambda p: p[1] - p[0], zip(old_im_center, self.center))
             scaled = retuple(tuple(shifted))
-            return tuple(map(lambda p: p[1] + p[0], zip(imcenter, scaled)))
+            return tuple(map(lambda p: p[1] + p[0], zip(new_im_center, scaled)))
 
         return LesionBBox(
             center=recenter(self.center),
@@ -84,6 +86,13 @@ class LesionBBox:
 @dataclass
 class Phantom:
     signals: list[LesionBBox]
+
+    def transform(
+        self, scale: float, img_center: tuple[int], new_img_center: tuple[int]
+    ) -> None:
+        self.signals = [
+            bbox.scale(scale, img_center, new_img_center) for bbox in self.signals
+        ]
 
     def dump(self, path: str) -> None:
         bboxes = list(

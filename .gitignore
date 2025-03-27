@@ -1,7 +1,13 @@
-.temp/
-dataset/*
+#Project
+.temp
+
+dataset
 !dataset/.gitkeep
-checkpoints/*.pt
+
+cfg
+!cfg/CatSim.cfg
+!cfg/Base_Phantom_Descriptor.json
+!cfg/Phantom_Generation.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

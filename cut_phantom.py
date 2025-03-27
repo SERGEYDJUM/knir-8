@@ -1,51 +1,49 @@
 import gecatsim as gcs
-from PIL import Image, ImageDraw
+from PIL import Image
 import json
+from os import path
 import numpy as np
 
-desc = json.load(open("cfg/adult_male_50percentile_chest.json"))
-
-N_fm = len(desc["volumefractionmap_filename"])
-
-h_max, w_max = 1050, 1700
+SRC_PATH = ".temp/uncut"
+S_H, S_W = 1050, 1700
 
 
-NSLICES = 4
+OUT_PATH = "./cfg"
+RSLICES = 4
 FOV = 1280, 920
 FOV_R = FOV[0] // 2, FOV[1] // 2
-FOV_S = 0, 0
+FOV_S = 0, 50
+
+desc = json.load(open(path.join(SRC_PATH, "adult_male_50percentile_chest.json")))
 
 layout_img = Image.new("RGBA", (FOV[0], FOV[1]), color=(0, 0, 0, 0))
 
-
-for idx in range(N_fm):
+for idx in range(len(desc["volumefractionmap_filename"])):
     w, h = desc["cols"][idx], desc["rows"][idx]
+    slices = desc["slices"][idx]
     x_offset, y_offset, z_offset = (
         desc["x_offset"][idx],
         desc["y_offset"][idx],
         desc["z_offset"][idx],
     )
+    fpath = path.join(SRC_PATH, desc["volumefractionmap_filename"][idx])
 
-    slices = desc["slices"][idx]
-    z_offset = int(desc["z_offset"][idx])
-    fname = "cfg/" + desc["volumefractionmap_filename"][idx]
-
-    print(f"Reading {fname}")
-    raw = gcs.rawread(fname, (slices, h, w), "int8")
+    print(f"Reading {fpath}")
+    raw = gcs.rawread(fpath, (slices, h, w), "int8")
 
     fl_center = desc["cols"][1] // 2, desc["rows"][1] // 2
     center = desc["cols"][idx] // 2, desc["rows"][idx] // 2
 
     center_offset = (((w + 1) / 2 - x_offset), ((h + 1) / 2 - y_offset))
     point_offset = w / 2 - center_offset[0], h / 2 + center_offset[1]
-    mountpoint = int(w_max / 2 - point_offset[0]), int(h_max / 2 - point_offset[1])
-    isocenter = w_max // 2, h_max // 2
+    mountpoint = int(S_W / 2 - point_offset[0]), int(S_H / 2 - point_offset[1])
+    isocenter = S_W // 2, S_H // 2
 
-    material = np.zeros((NSLICES * 2, h_max, w_max), dtype=np.int8)
+    material = np.zeros((RSLICES * 2, S_H, S_W), dtype=np.int8)
 
     material[
         :, mountpoint[1] : mountpoint[1] + h, mountpoint[0] : mountpoint[0] + w
-    ] = raw[slices // 2 - NSLICES : slices // 2 + NSLICES, :, :]
+    ] = raw[slices // 2 - RSLICES : slices // 2 + RSLICES, :, :]
 
     del raw
 
@@ -63,10 +61,8 @@ for idx in range(N_fm):
 
     layout_img.alpha_composite(Image.fromarray(layer))
 
-    out_fname = fname + ".raw"
+    out_fpath = (fpath + ".raw").replace(SRC_PATH, OUT_PATH)
+    print(f"Writing {out_fpath}")
+    gcs.rawwrite(out_fpath, np.ascontiguousarray(material))
 
-    gcs.rawwrite(out_fname, np.ascontiguousarray(material))
-
-    print(f"{out_fname} written")
-
-layout_img.save(".temp/layout_img.png")
+layout_img.save(path.join(SRC_PATH, "ph_layout.png"))

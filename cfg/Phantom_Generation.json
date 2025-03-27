@@ -1,8 +1,6 @@
 {
-    "texture": {
-        "noise_cutoff": 0.95
-    },
-    "material": "Lumex",
+    "material": "ncat_air",
+    "orbit": 200,
     "objects": [
         {
             "mean_radius": 6,
@@ -32,6 +30,18 @@
             "surface_frequency": 6,
             "surface_amplitude": 0.3,
             "y_deformation": 0.6
+        },
+        {
+            "mean_radius": 6,
+            "surface_frequency": 7,
+            "surface_amplitude": 0.3,
+            "x_deformation": 0.6
+        },
+        {
+            "mean_radius": 6,
+            "surface_frequency": 7,
+            "surface_amplitude": 0.3,
+            "x_deformation": 0.6
         },
         {
             "mean_radius": 6,

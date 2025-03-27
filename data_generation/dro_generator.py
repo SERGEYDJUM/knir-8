@@ -144,16 +144,16 @@ def frange(start, stop, step):
 
 def read_json_cfg(path: str) -> list[dict]:
     params = []
-    texture = {}
+    orbit = 150
     with open(path, "r", encoding="utf-8") as cfg_file:
         cfg_content = json.load(cfg_file)
-        texture = cfg_content["texture"]
+        orbit = cfg_content["orbit"]
         for object in cfg_content["objects"]:
             obj_param = dict(default_parameters.items())
             for key, val in object.items():
                 obj_param[key] = [val, val, 1]
             params.append(obj_param)
-    return params, texture
+    return params, orbit
 
 
 def generate_tex(scale: int, cutoff: float, shape):
@@ -173,10 +173,8 @@ def generate_tex(scale: int, cutoff: float, shape):
 
 def generate_phantom(
     cfg_path: str,
-    roi_radius: int = 64,
-    orbit: int = 150,
-    empty: bool = False,
-    slices: int = 8,
+    roi_radius: int,
+    shape: tuple[int],
 ) -> tuple[np.ndarray, np.ndarray, list[LesionBBox]]:
     """Generates a phantom.
 
@@ -187,15 +185,16 @@ def generate_phantom(
         tuple[np.ndarray, list[LesionBBox]]: phantom mask and lesions on it.
     """
 
-    placement_radius = orbit
-    phantom = np.zeros((512, 512, slices), dtype=np.bool)
-    mid = 512 // 2
+    phantom = np.zeros(shape, dtype=np.bool)
+    ph_mid = shape[0] // 2, shape[1] // 2, shape[2] // 2
+    traj_deform = shape[1] / shape[0]
 
-    objects_cfgs, texture_cfg = read_json_cfg(cfg_path)
-    tex_cutoff = texture_cfg["noise_cutoff"]
+    # objects_cfgs, texture_cfg = read_json_cfg(cfg_path)
+    objects_cfgs, orbit = read_json_cfg(cfg_path)
+    # tex_cutoff = texture_cfg["noise_cutoff"]
 
-    angle_s = 2 * np.pi / len(objects_cfgs)
-    safe_r = int(placement_radius * np.cos(np.pi / 2 - angle_s / 2))
+    angle_s = 2 * np.pi / (len(objects_cfgs) - 1)
+    safe_r = int(orbit * np.cos(np.pi / 2 - angle_s / 2))
 
     if safe_r <= roi_radius:
         raise UserWarning(f"Safezone too small for ROI ({safe_r} < {roi_radius})")
@@ -228,30 +227,34 @@ def generate_phantom(
         _, mask = get_single_dro(generate_params(expand_range(ocfg))[0])
 
         m_zcut = mask.shape[2] // 2
-        m_zcut_r = slices // 2
+        m_zcut_r = shape[2] // 2
 
         mask = mask[
-            mid - safe_r : mid + safe_r,
-            mid - safe_r : mid + safe_r,
+            256 - safe_r : 256 + safe_r,
+            256 - safe_r : 256 + safe_r,
             m_zcut - m_zcut_r : m_zcut + m_zcut_r,
         ]
 
-        xc = int(placement_radius * np.cos(-angle_s * i)) + mid
-        yc = int(placement_radius * np.sin(-angle_s * i)) + mid
+        xc = int(orbit * traj_deform * np.cos(-angle_s * (i - 1))) + ph_mid[1]
+        yc = int(orbit * np.sin(-angle_s * (i - 1))) + ph_mid[0]
+
+        if i == 0:
+            xc, yc = ph_mid[1], ph_mid[0]
 
         xi, yi = xc - safe_r, yc - safe_r
         xo, yo = xc + safe_r, yc + safe_r
 
-        if not empty:
-            phantom[yi:yo, xi:xo, :] = np.logical_or(mask, phantom[yi:yo, xi:xo, :])
+        phantom[yi:yo, xi:xo, :] = np.logical_or(mask, phantom[yi:yo, xi:xo, :])
 
-        outer_circle_r = 256 - np.sqrt((xc - mid) ** 2 + (yc - mid) ** 2)
-        real_safe_r = min(safe_r, int(outer_circle_r / np.sqrt(2)))
+        # TODO: bring back real safe r
+        # outer_circle_r = min(ph_mid[0], ph_mid[1]) - np.sqrt((xc - ph_mid[1]) ** 2 + (yc - ph_mid[0]) ** 2)
+        # real_safe_r = min(safe_r, int(outer_circle_r / np.sqrt(2)))
+        real_safe_r = safe_r
         r_z = int(obj_r * obj_z_deform)
 
         bboxes.append(
             LesionBBox(
-                center=(xc, yc, mask.shape[2] // 2),
+                center=(xc, yc, ph_mid[2]),
                 r=(
                     int(obj_r * obj_x_deform),
                     int(obj_r * obj_y_deform),
@@ -262,8 +265,11 @@ def generate_phantom(
             )
         )
 
-    bg_tex = generate_tex(4, tex_cutoff, phantom.shape)
-    bg_tex = np.logical_or(bg_tex, generate_tex(2, tex_cutoff, phantom.shape))
-    bg_tex = np.logical_or(bg_tex, generate_tex(1, tex_cutoff, phantom.shape))
+    # bg_tex = generate_tex(4, tex_cutoff, phantom.shape)
+    # bg_tex = np.logical_or(bg_tex, generate_tex(2, tex_cutoff, phantom.shape))
+    # bg_tex = np.logical_or(bg_tex, generate_tex(1, tex_cutoff, phantom.shape))
+
+    # TODO: Deprecate
+    bg_tex = np.zeros(shape, dtype=np.bool)
 
     return phantom, bboxes, bg_tex

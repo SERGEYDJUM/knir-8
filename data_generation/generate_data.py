@@ -43,12 +43,12 @@ def process_signals(mask, bboxes, bg_tex_mask, save_mask: bool = False) -> Phant
     z_slices = mask.shape[0]
     size = mask.shape[2]
 
-    x, y = np.mgrid[:size, :size]
-    allowed_circle = ((x - size // 2) ** 2 + (y - size // 2) ** 2) < (size // 2) ** 2
+    # x, y = np.mgrid[:size, :size]
+    # allowed_circle = ((x - size // 2) ** 2 + (y - size // 2) ** 2) < (size // 2) ** 2
 
     empty_mask = np.ones_like(bg_tex_mask) - bg_tex_mask
-    save_raw(empty_mask * allowed_circle, path.join(CFGDIR, "dro_phantom_bg_empty.raw"))
-    save_raw(bg_tex_mask * allowed_circle, path.join(CFGDIR, "dro_phantom_t_empty.raw"))
+    save_raw(empty_mask, path.join(CFGDIR, "dro_phantom_bg_empty.raw"))
+    save_raw(bg_tex_mask, path.join(CFGDIR, "dro_phantom_t_empty.raw"))
 
     if save_mask:
         img = Image.fromarray((mask[z_slices // 2, :, :].astype(np.uint8) * 255))
@@ -64,9 +64,9 @@ def process_signals(mask, bboxes, bg_tex_mask, save_mask: bool = False) -> Phant
     inv_mask = 1 - mask - bg_tex_mask
     inv_mask = np.clip(inv_mask, 0, 1)
 
-    mask *= allowed_circle
-    inv_mask *= allowed_circle
-    bg_tex_mask *= allowed_circle
+    # mask *= allowed_circle
+    # inv_mask *= allowed_circle
+    # bg_tex_mask *= allowed_circle
 
     if save_mask:
         img = Image.fromarray((bg_tex_mask[z_slices // 2, :, :].astype(np.uint8) * 255))
@@ -87,9 +87,14 @@ def patched_phantom(save_mask: bool = False):
     json.dump(phantom_cfg, open(path.join(CFGDIR, "Phantom_NS_Descriptor.json"), "w"))
     material = json.load(open(ph_g_path))["material"]
 
-    slices = int(max(phantom_cfg["slices"]))
+    m_slices = int(max(phantom_cfg["slices"]))
+    m_rows = int(max(phantom_cfg["rows"]))
+    m_cols = int(max(phantom_cfg["cols"]))
 
-    mask, bboxes, bg_tex_mask = generate_phantom(ph_g_path, slices=slices)
+    mask, bboxes, bg_tex_mask = generate_phantom(
+        ph_g_path, roi_radius=64, shape=(m_rows, m_cols, m_slices)
+    )
+
     inv_mask = np.transpose(np.logical_not(mask).astype(np.int8), (2, 0, 1))
     mask = np.transpose(mask, (2, 0, 1)).astype(np.int8)
     bg_tex_mask = np.transpose(bg_tex_mask, (2, 0, 1)).astype(np.int8)
@@ -127,9 +132,9 @@ def patched_phantom(save_mask: bool = False):
     phantom_cfg["x_size"].append(phantom_cfg["x_size"][-1])
     phantom_cfg["y_size"].append(phantom_cfg["y_size"][-1])
     phantom_cfg["z_size"].append(phantom_cfg["z_size"][-1])
-    phantom_cfg["x_offset"].append(mask.shape[2] // 2)
-    phantom_cfg["y_offset"].append(mask.shape[1] // 2)
-    phantom_cfg["z_offset"].append(mask.shape[0] // 2)
+    phantom_cfg["x_offset"].append((mask.shape[2] // 2) + 0.5)
+    phantom_cfg["y_offset"].append((mask.shape[1] // 2) + 0.5)
+    phantom_cfg["z_offset"].append((mask.shape[0] // 2) + 0.5)
 
     json.dump(phantom_cfg, open(path.join(CFGDIR, "Phantom_Descriptor.json"), "w"))
 
@@ -155,7 +160,7 @@ def reconstruct(catsim: xc.CatSim) -> tuple[NDArray, float]:
 
 
 def demo_reconstructed(
-    tomogram: NDArray, bboxes: Phantom, imscale: float, name_prefix: str = "recon"
+    tomogram: NDArray, bboxes: Phantom, name_prefix: str = "recon"
 ) -> None:
     demo_dir = path.join(WORKDIR, "out")
     makedirs(demo_dir, exist_ok=True)
@@ -169,9 +174,9 @@ def demo_reconstructed(
         image = Image.fromarray(demo_tomo[i, :, :]).convert("RGB")
         draw = ImageDraw.Draw(image)
         for bbox in bboxes.signals:
-            # draw.rectangle(bbox.scale(imscale).bbox(), outline=(0, 255, 0))
-            draw.rectangle(bbox.scale(imscale).roi_bbox(), outline=(0, 0, 0))
-            draw.rectangle(bbox.scale(imscale).safe_bbox(), outline=(0, 0, 255))
+            # draw.rectangle(bbox.bbox(), outline=(0, 255, 0))
+            draw.rectangle(bbox.roi_bbox(), outline=(0, 0, 0))
+            draw.rectangle(bbox.safe_bbox(), outline=(0, 0, 255))
         image.save(path.join(demo_dir, f"{name_prefix}_slice_{i}.png"))
 
 
@@ -194,6 +199,7 @@ def main():
     bbox_cache = path.join(WORKDIR, "bboxes.json")
     catsim_cfg = path.join(CFGDIR, "CatSim.cfg")
     phantomgen_cfg = path.join(CFGDIR, "Phantom_Generation.json")
+    base_phantom_cfg = path.join(CFGDIR, "Base_Phantom_Descriptor.json")
 
     dataset_csv = path.join(DATASET_DIR, "dataset.csv")
     dataset_cfgs = path.join(DATASET_DIR, "cfgs")
@@ -234,6 +240,11 @@ def main():
         catsim_cfg_hash = md5(contents).hexdigest()
         ofile.write(contents)
 
+    bp_cfg = json.load(open(base_phantom_cfg))
+    bp_slices = int(max(bp_cfg["slices"]))
+    bp_rows = int(max(bp_cfg["rows"]))
+    bp_cols = int(max(bp_cfg["cols"]))
+
     # Simulation
     catsim = xc.CatSim(catsim_cfg)
     if args.empty:
@@ -262,11 +273,22 @@ def main():
             with open(raw_path, "wb") as raw_file:
                 raw_file.write(tomogram)
 
+            bboxes.transform(
+                imscale,
+                (
+                    bp_cols // 2,
+                    bp_rows // 2,
+                    bp_slices // 2,
+                ),
+                (
+                    tomogram.shape[2] // 2,
+                    tomogram.shape[1] // 2,
+                    tomogram.shape[0] // 2,
+                ),
+            )
+
             for slice_idx in range(tomogram.shape[0]):
                 for bb_idx, bbox in enumerate(bboxes.signals):
-                    if abs(imscale - 1) > 1e-3:
-                        bbox = bbox.scale(imscale)
-
                     writer.writerow(
                         (
                             repeat_iter,
@@ -288,7 +310,7 @@ def main():
                     )
 
             if args.demo:
-                demo_reconstructed(tomogram, bboxes, imscale)
+                demo_reconstructed(tomogram, bboxes)
 
 
 if __name__ == "__main__":
