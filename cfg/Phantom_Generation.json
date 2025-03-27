@@ -1,0 +1,44 @@
+{
+    "texture": {
+        "noise_cutoff": 0.95
+    },
+    "material": "Lumex",
+    "objects": [
+        {
+            "mean_radius": 6,
+            "surface_amplitude": 0,
+            "y_deformation": 0.6
+        },
+        {
+            "mean_radius": 6,
+            "surface_frequency": 3,
+            "surface_amplitude": 0.3,
+            "x_deformation": 0.6
+        },
+        {
+            "mean_radius": 6,
+            "surface_frequency": 4,
+            "surface_amplitude": 0.3,
+            "y_deformation": 0.6
+        },
+        {
+            "mean_radius": 6,
+            "surface_frequency": 5,
+            "surface_amplitude": 0.3,
+            "x_deformation": 0.6
+        },
+        {
+            "mean_radius": 6,
+            "surface_frequency": 6,
+            "surface_amplitude": 0.3,
+            "y_deformation": 0.6
+        },
+        {
+            "mean_radius": 6,
+            "surface_frequency": 7,
+            "surface_amplitude": 0.3,
+            "x_deformation": 0.6
+        }
+    ]
+}
+

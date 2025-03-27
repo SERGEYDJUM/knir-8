@@ -3,14 +3,15 @@ name = "knir-8"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.1.2",
     "pandas>=2.2.3",
-    "pillow>=11.0.0",
     "scikit-learn>=1.6.1",
     "torch>=2.6.0",
     "torchvision>=0.21.0",
+    "gecatsim>=1.4.4",
+    "pillow>=11.0.0",
 ]
 
 [[tool.uv.index]]
