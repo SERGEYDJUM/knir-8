@@ -34,9 +34,7 @@ for idx in range(len(desc["volumefractionmap_filename"])):
     fl_center = desc["cols"][1] // 2, desc["rows"][1] // 2
     center = desc["cols"][idx] // 2, desc["rows"][idx] // 2
 
-    center_offset = (((w + 1) / 2 - x_offset), ((h + 1) / 2 - y_offset))
-    point_offset = w / 2 - center_offset[0], h / 2 + center_offset[1]
-    mountpoint = int(S_W / 2 - point_offset[0]), int(S_H / 2 - point_offset[1])
+    mountpoint = int(S_W / 2 - x_offset), int(S_H / 2 - h + y_offset)
     isocenter = S_W // 2, S_H // 2
 
     material = np.zeros((RSLICES * 2, S_H, S_W), dtype=np.int8)

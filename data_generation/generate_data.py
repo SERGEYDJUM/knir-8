@@ -79,6 +79,43 @@ def process_signals(mask, bboxes, bg_tex_mask, save_mask: bool = False) -> Phant
     return Phantom(bboxes)
 
 
+def optimize_layer(
+    layer: NDArray, x_offset: int, y_offset: int
+) -> tuple[NDArray, int, int]:
+    ss_layer = layer.sum(axis=0)
+    rowsum = ss_layer.sum(axis=0) > 0
+    colsum = ss_layer.sum(axis=1) > 0
+
+    r_start, r_end = 0, ss_layer.shape[0]
+    c_start, c_end = 0, ss_layer.shape[1]
+
+    for i in range(0, len(colsum)):
+        if colsum[i]:
+            r_start = max(i - 1, 0)
+            break
+
+    for i in reversed(range(0, len(colsum))):
+        if colsum[i]:
+            r_end = i + 1
+            break
+
+    for j in range(0, len(rowsum)):
+        if rowsum[j]:
+            c_start = max(j - 1, 0)
+            break
+
+    for j in reversed(range(0, len(rowsum))):
+        if rowsum[j]:
+            c_end = j + 1
+            break
+
+    return (
+        np.ascontiguousarray(layer[:, r_start:r_end, c_start:c_end]),
+        x_offset - c_start,
+        r_end - y_offset,
+    )
+
+
 def patched_phantom(save_mask: bool = False):
     ph_g_path = path.join(CFGDIR, "Phantom_Generation.json")
     b_p_path = path.join(CFGDIR, "Base_Phantom_Descriptor.json")
@@ -101,9 +138,12 @@ def patched_phantom(save_mask: bool = False):
     bboxes = process_signals(mask, bboxes, bg_tex_mask, save_mask=save_mask)
 
     for i, layer_name in enumerate(phantom_cfg["volumefractionmap_filename"]):
-        slices = int(phantom_cfg["slices"][i])
-        rows = int(phantom_cfg["rows"][i])
-        cols = int(phantom_cfg["cols"][i])
+        x_offset, y_offset = phantom_cfg["x_offset"][i], phantom_cfg["y_offset"][i]
+        slices, rows, cols = (
+            phantom_cfg["slices"][i],
+            phantom_cfg["rows"][i],
+            phantom_cfg["cols"][i],
+        )
 
         layer = xc.rawread(path.join(CFGDIR, layer_name), (slices, rows, cols), "int8")
         midpoint = layer.shape[1] // 2, layer.shape[2] // 2
@@ -114,6 +154,13 @@ def patched_phantom(save_mask: bool = False):
             midpoint[0] - mask_r[0] : midpoint[0] + mask_r[0],
             midpoint[1] - mask_r[1] : midpoint[1] + mask_r[1],
         ] *= inv_mask
+
+        layer, x_offset, y_offset = optimize_layer(layer, x_offset, y_offset)
+
+        phantom_cfg["x_offset"][i] = x_offset
+        phantom_cfg["y_offset"][i] = y_offset
+        phantom_cfg["rows"][i] = layer.shape[1]
+        phantom_cfg["cols"][i] = layer.shape[2]
 
         xc.rawwrite(path.join(CFGDIR, layer_name + ".patched"), layer)
 
@@ -132,9 +179,9 @@ def patched_phantom(save_mask: bool = False):
     phantom_cfg["x_size"].append(phantom_cfg["x_size"][-1])
     phantom_cfg["y_size"].append(phantom_cfg["y_size"][-1])
     phantom_cfg["z_size"].append(phantom_cfg["z_size"][-1])
-    phantom_cfg["x_offset"].append((mask.shape[2] // 2) + 0.5)
-    phantom_cfg["y_offset"].append((mask.shape[1] // 2) + 0.5)
-    phantom_cfg["z_offset"].append((mask.shape[0] // 2) + 0.5)
+    phantom_cfg["x_offset"].append(mask.shape[2] // 2)
+    phantom_cfg["y_offset"].append(mask.shape[1] // 2)
+    phantom_cfg["z_offset"].append(mask.shape[0] // 2)
 
     json.dump(phantom_cfg, open(path.join(CFGDIR, "Phantom_Descriptor.json"), "w"))
 
@@ -249,6 +296,9 @@ def main():
     catsim = xc.CatSim(catsim_cfg)
     if args.empty:
         catsim.phantom.filename = "Phantom_NS_Descriptor.json"
+
+    catsim.protocol.viewCount = catsim.protocol.viewsPerRotation
+    catsim.protocol.stopViewId = catsim.protocol.viewCount - 1
 
     catsim.resultsName = EXPERIMENT_PREFIX
 

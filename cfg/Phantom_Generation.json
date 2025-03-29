@@ -1,53 +1,64 @@
 {
     "material": "ncat_air",
-    "orbit": 200,
+    "orbit": 250,
     "objects": [
-        {
-            "mean_radius": 6,
-            "surface_amplitude": 0,
-            "y_deformation": 0.6
-        },
         {
             "mean_radius": 6,
             "surface_frequency": 3,
             "surface_amplitude": 0.3,
-            "x_deformation": 0.6
+            "y_deformation": 0.3
         },
         {
             "mean_radius": 6,
             "surface_frequency": 4,
             "surface_amplitude": 0.3,
-            "y_deformation": 0.6
+            "x_deformation": 0.3
         },
         {
             "mean_radius": 6,
             "surface_frequency": 5,
             "surface_amplitude": 0.3,
-            "x_deformation": 0.6
+            "y_deformation": 0.3
         },
         {
             "mean_radius": 6,
-            "surface_frequency": 6,
-            "surface_amplitude": 0.3,
-            "y_deformation": 0.6
+            "surface_frequency": 3,
+            "surface_amplitude": 0.3
         },
         {
             "mean_radius": 6,
-            "surface_frequency": 7,
+            "surface_frequency": 4,
             "surface_amplitude": 0.3,
-            "x_deformation": 0.6
+            "y_deformation": 0.3
         },
         {
             "mean_radius": 6,
-            "surface_frequency": 7,
+            "surface_frequency": 5,
             "surface_amplitude": 0.3,
-            "x_deformation": 0.6
+            "x_deformation": 0.3
         },
         {
             "mean_radius": 6,
-            "surface_frequency": 7,
+            "surface_frequency": 3,
+            "surface_amplitude": 0.3
+        },
+        {
+            "mean_radius": 6,
+            "surface_frequency": 4,
             "surface_amplitude": 0.3,
-            "x_deformation": 0.6
+            "x_deformation": 0.3
+        },
+        {
+            "mean_radius": 6,
+            "surface_frequency": 5,
+            "surface_amplitude": 0.3,
+            "y_deformation": 0.3
+        },
+        {
+            "mean_radius": 6,
+            "surface_frequency": 3,
+            "surface_amplitude": 0.3,
+            "x_deformation": 0.3
         }
     ]
 }
