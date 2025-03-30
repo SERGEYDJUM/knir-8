@@ -38,7 +38,7 @@ def main():
         y[i] = row.signal_present
         hy[i] = row.human_score
 
-    model = CHO(channel_noise_std=4, test_stat_noise_std=12, _debug_mode=True)
+    model = CHO(channel_noise_std=4, test_stat_noise_std=12)
     # model.train(X[0::2, :, :], y[0::2])
     model.train(X, y)
 

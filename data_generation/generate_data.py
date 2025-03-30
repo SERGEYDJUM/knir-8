@@ -1,3 +1,4 @@
+from copy import deepcopy
 import gecatsim as xc
 import gecatsim.reconstruction.pyfiles.recon as recon
 from gecatsim.pyfiles.CommonTools import my_path as catsim_paths
@@ -116,38 +117,56 @@ def optimize_layer(
     )
 
 
+def opt_write_layer(layer: NDArray, idx: int, cfg: dict, postfix: str) -> dict:
+    opt_layer, opt_x_offset, opt_y_offset = optimize_layer(
+        layer, cfg["x_offset"][idx], cfg["y_offset"][idx]
+    )
+
+    cfg["x_offset"][idx] = opt_x_offset
+    cfg["y_offset"][idx] = opt_y_offset
+    cfg["rows"][idx] = opt_layer.shape[1]
+    cfg["cols"][idx] = opt_layer.shape[2]
+    cfg["volumefractionmap_filename"][idx] += postfix
+
+    xc.rawwrite(path.join(CFGDIR, cfg["volumefractionmap_filename"][idx]), opt_layer)
+    return cfg
+
+
 def patched_phantom(save_mask: bool = False):
     ph_g_path = path.join(CFGDIR, "Phantom_Generation.json")
     b_p_path = path.join(CFGDIR, "Base_Phantom_Descriptor.json")
 
-    phantom_cfg = json.load(open(b_p_path))
-    json.dump(phantom_cfg, open(path.join(CFGDIR, "Phantom_NS_Descriptor.json"), "w"))
     material = json.load(open(ph_g_path))["material"]
+    ph_cfg = json.load(open(b_p_path))
+    ns_ph_cfg = deepcopy(ph_cfg)
 
-    m_slices = int(max(phantom_cfg["slices"]))
-    m_rows = int(max(phantom_cfg["rows"]))
-    m_cols = int(max(phantom_cfg["cols"]))
+    m_slices = int(max(ph_cfg["slices"]))
+    m_rows = int(max(ph_cfg["rows"]))
+    m_cols = int(max(ph_cfg["cols"]))
 
     mask, bboxes, bg_tex_mask = generate_phantom(
         ph_g_path, roi_radius=64, shape=(m_rows, m_cols, m_slices)
     )
 
-    inv_mask = np.transpose(np.logical_not(mask).astype(np.int8), (2, 0, 1))
     mask = np.transpose(mask, (2, 0, 1)).astype(np.int8)
     bg_tex_mask = np.transpose(bg_tex_mask, (2, 0, 1)).astype(np.int8)
     bboxes = process_signals(mask, bboxes, bg_tex_mask, save_mask=save_mask)
 
-    for i, layer_name in enumerate(phantom_cfg["volumefractionmap_filename"]):
-        x_offset, y_offset = phantom_cfg["x_offset"][i], phantom_cfg["y_offset"][i]
+    inv_mask = 1 - mask
+
+    for i in range(ph_cfg["n_materials"]):
+        vfm_fname = ph_cfg["volumefractionmap_filename"][i]
         slices, rows, cols = (
-            phantom_cfg["slices"][i],
-            phantom_cfg["rows"][i],
-            phantom_cfg["cols"][i],
+            ph_cfg["slices"][i],
+            ph_cfg["rows"][i],
+            ph_cfg["cols"][i],
         )
 
-        layer = xc.rawread(path.join(CFGDIR, layer_name), (slices, rows, cols), "int8")
+        layer = xc.rawread(path.join(CFGDIR, vfm_fname), (slices, rows, cols), "int8")
         midpoint = layer.shape[1] // 2, layer.shape[2] // 2
         mask_r = mask.shape[1] // 2, mask.shape[2] // 2
+
+        ns_ph_cfg = opt_write_layer(layer, i, ns_ph_cfg, ".ns_patched")
 
         layer[
             :,
@@ -155,37 +174,27 @@ def patched_phantom(save_mask: bool = False):
             midpoint[1] - mask_r[1] : midpoint[1] + mask_r[1],
         ] *= inv_mask
 
-        layer, x_offset, y_offset = optimize_layer(layer, x_offset, y_offset)
+        ph_cfg = opt_write_layer(layer, i, ph_cfg, ".patched")
 
-        phantom_cfg["x_offset"][i] = x_offset
-        phantom_cfg["y_offset"][i] = y_offset
-        phantom_cfg["rows"][i] = layer.shape[1]
-        phantom_cfg["cols"][i] = layer.shape[2]
+    with open(path.join(CFGDIR, "Phantom_NS_Descriptor.json"), "w") as cfg_file:
+        json.dump(ns_ph_cfg, cfg_file)
 
-        xc.rawwrite(path.join(CFGDIR, layer_name + ".patched"), layer)
+    ph_cfg["n_materials"] += 1
+    ph_cfg["mat_name"].append(material)
+    ph_cfg["volumefractionmap_filename"].append("dro_phantom_mask.raw")
+    ph_cfg["volumefractionmap_datatype"].append("int8")
+    ph_cfg["cols"].append(mask.shape[2])
+    ph_cfg["rows"].append(mask.shape[1])
+    ph_cfg["slices"].append(mask.shape[0])
+    ph_cfg["x_size"].append(ph_cfg["x_size"][-1])
+    ph_cfg["y_size"].append(ph_cfg["y_size"][-1])
+    ph_cfg["z_size"].append(ph_cfg["z_size"][-1])
+    ph_cfg["x_offset"].append(mask.shape[2] // 2)
+    ph_cfg["y_offset"].append(mask.shape[1] // 2)
+    ph_cfg["z_offset"].append(mask.shape[0] // 2)
 
-    phantom_cfg["n_materials"] += 1
-    phantom_cfg["mat_name"].append(material)
-
-    vfms = list(
-        map(lambda x: x + ".patched", phantom_cfg["volumefractionmap_filename"])
-    )
-
-    phantom_cfg["volumefractionmap_filename"] = vfms + ["dro_phantom_mask.raw"]
-    phantom_cfg["volumefractionmap_datatype"].append("int8")
-    phantom_cfg["cols"].append(mask.shape[2])
-    phantom_cfg["rows"].append(mask.shape[1])
-    phantom_cfg["slices"].append(mask.shape[0])
-    phantom_cfg["x_size"].append(phantom_cfg["x_size"][-1])
-    phantom_cfg["y_size"].append(phantom_cfg["y_size"][-1])
-    phantom_cfg["z_size"].append(phantom_cfg["z_size"][-1])
-    phantom_cfg["x_offset"].append(mask.shape[2] // 2)
-    phantom_cfg["y_offset"].append(mask.shape[1] // 2)
-    phantom_cfg["z_offset"].append(mask.shape[0] // 2)
-
-    json.dump(phantom_cfg, open(path.join(CFGDIR, "Phantom_Descriptor.json"), "w"))
-
-    # TODO: Fix bboxes after patching
+    with open(path.join(CFGDIR, "Phantom_Descriptor.json"), "w") as cfg_file:
+        json.dump(ph_cfg, cfg_file)
 
     return bboxes
 
@@ -195,7 +204,7 @@ def reconstruct(catsim: xc.CatSim) -> tuple[NDArray, float]:
     recon.recon(catsim)
 
     imsize, slice_cnt = catsim.recon.imageSize, catsim.recon.sliceCount
-    bbox_scale = catsim.phantom.scale * (imsize**2 / (512 * catsim.recon.fov))
+    bbox_scale = catsim.phantom.scale * imsize / catsim.recon.fov
 
     tomogram = xc.rawread(
         EXPERIMENT_PREFIX + f"_{imsize}x{imsize}x{slice_cnt}.raw",
@@ -230,10 +239,9 @@ def demo_reconstructed(
 def parse_args() -> Namespace:
     parser = ArgumentParser()
     parser.add_argument("-d", "--demo", action="store_true")
-    parser.add_argument("-m", "--mask", action="store_true")
     parser.add_argument("-s", "--skipgen", action="store_true")
     parser.add_argument("-e", "--empty", action="store_true")
-    parser.add_argument("--reconstruct-only", action="store_true")
+    parser.add_argument("--recon-only", action="store_true")
     parser.add_argument("-r", "--repeat", default=1, type=int)
     return parser.parse_args()
 
@@ -259,7 +267,7 @@ def main():
     # Phantom generation
     bboxes: Phantom = None
     if not args.skipgen:
-        bboxes = patched_phantom(save_mask=args.mask)
+        bboxes = patched_phantom(save_mask=args.demo)
         bboxes.dump(bbox_cache)
     else:
         bboxes = Phantom.load(bbox_cache)
@@ -294,13 +302,15 @@ def main():
 
     # Simulation
     catsim = xc.CatSim(catsim_cfg)
-    if args.empty:
-        catsim.phantom.filename = "Phantom_NS_Descriptor.json"
-
+    catsim.resultsName = EXPERIMENT_PREFIX
     catsim.protocol.viewCount = catsim.protocol.viewsPerRotation
     catsim.protocol.stopViewId = catsim.protocol.viewCount - 1
+    catsim.phantom.callback = "Phantom_Voxelized"
+    catsim.phantom.projectorCallback = "C_Projector_Voxelized"
+    catsim.phantom.filename = "Phantom_Descriptor.json"
 
-    catsim.resultsName = EXPERIMENT_PREFIX
+    if args.empty:
+        catsim.phantom.filename = "Phantom_NS_Descriptor.json"
 
     if not path.exists(dataset_csv):
         with open(dataset_csv, "w", encoding="utf-8") as csvfile:
@@ -310,7 +320,7 @@ def main():
         writer = csv.writer(csvfile, lineterminator="\n")
 
         for repeat_iter in range(args.repeat):
-            if not args.reconstruct_only:
+            if not args.recon_only:
                 catsim.run_all()
 
             tomogram, imscale = reconstruct(catsim)
@@ -336,6 +346,8 @@ def main():
                     tomogram.shape[0] // 2,
                 ),
             )
+
+            print(f"BBoxes scaled by {imscale:.3f}.")
 
             for slice_idx in range(tomogram.shape[0]):
                 for bb_idx, bbox in enumerate(bboxes.signals):

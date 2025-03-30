@@ -4,7 +4,7 @@ from tkinter import ttk
 from os import path
 from pandas import DataFrame, read_csv
 from random import shuffle
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageOps
 from numpy.typing import NDArray
 import numpy as np
 
@@ -107,8 +107,8 @@ class App:
         self.img_label = ttk.Label(self.window, image=self.image_m)
         self.img_label.grid(row=0, column=0)
 
-        self.img_label_s = ttk.Label(self.window, image=self.image_s)
-        self.img_label_s.grid(row=0, column=1)
+        # self.img_label_s = ttk.Label(self.window, image=self.image_s)
+        # self.img_label_s.grid(row=0, column=1)
 
         self.window.bind("z", lambda _: self.mark(False))
         self.window.bind("/", lambda _: self.mark(True))
@@ -146,12 +146,20 @@ class App:
 
         image = load_image(self.csvdf, self.unscored_idxs[self.current_index])
 
-        self.image_s = image_to_tk(image, scale=2)
+        # self.image_s = image_to_tk(image, scale=2)
         self.image_m = image_to_tk(image, scale=4)
 
         if self.init_complete:
-            self.img_label_s.config(image=self.image_s)
-            self.img_label.config(image=self.image_m)
+            # self.img_label_s.config(image=self.image_s)
+            self.img_label.config(
+                image=self.image_m,
+                padding=(
+                    np.random.uniform(0, 200),
+                    np.random.uniform(0, 200),
+                    100,
+                    100,
+                ),
+            )
 
     def mark(self, present: bool):
         assert present is not None
