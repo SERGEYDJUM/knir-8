@@ -22,7 +22,7 @@ DATASET_DIR = path.abspath("./dataset")
 EXPERIMENT_PREFIX = path.join(WORKDIR, "MAIN")
 
 CSV_HEADER = (
-    "tomogram_index",
+    "raw_source",
     "slice_index",
     "bbox_index",
     "bbox_center_x",
@@ -32,11 +32,11 @@ CSV_HEADER = (
     "bbox_safe_r_x",
     "bbox_safe_r_y",
     "signal_present",
+    "human_score",
     "tube_current",
     "recon_kernel",
     "phantom_cfg_md5",
     "xcist_cfg_md5",
-    "raw_source",
 )
 
 
@@ -358,7 +358,7 @@ def main():
 
                     writer.writerow(
                         (
-                            repeat_iter,
+                            path.relpath(raw_path, dataset_raws),
                             slice_idx,
                             bb_idx,
                             bbox.center[0],
@@ -368,11 +368,11 @@ def main():
                             bbox.sr[0],
                             bbox.sr[1],
                             not args.empty,
+                            -1,
                             int(catsim.protocol.mA),
                             catsim.recon.kernelType,
                             ph_cfg_hash,
                             catsim_cfg_hash,
-                            path.relpath(raw_path, dataset_raws),
                         )
                     )
 

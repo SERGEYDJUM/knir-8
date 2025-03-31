@@ -31,23 +31,8 @@ def rawread(path: str, shape: tuple) -> NDArray:
 
 def load_dataset() -> tuple[DataFrame, list[int]]:
     csvdf = read_csv(DATASET_CSV)
-
-    if "human_score" not in csvdf.columns:
-        csvdf["human_score"] = -1
-
     unscored_indexes = csvdf.index[csvdf["human_score"] == -1].tolist()
     shuffle(unscored_indexes)
-    shuffle(unscored_indexes)
-
-    marked = csvdf[csvdf["human_score"] != -1]
-
-    if len(marked) > 2:
-        matched = marked["human_score"].to_numpy(dtype=np.bool) == marked[
-            "signal_present"
-        ].to_numpy(dtype=np.bool)
-
-        print(f"Current marked precision: {matched.sum()/len(matched)}")
-
     return csvdf, unscored_indexes
 
 
@@ -57,7 +42,7 @@ def load_image(df: DataFrame, row_idx: int) -> NDArray:
     row = df.iloc[row_idx]
     raw_name = row["raw_source"]
     center = row["bbox_center_x"], row["bbox_center_y"]
-    radius = int(max(row["bbox_safe_r_x"], row["bbox_safe_r_y"]) * 1.2)
+    radius = int(max(row["bbox_safe_r_x"], row["bbox_safe_r_y"]))
 
     if raw_name not in image_cache:
         raw_path = path.join(DATASET_RAWS, raw_name)
@@ -88,6 +73,8 @@ def load_image(df: DataFrame, row_idx: int) -> NDArray:
     image -= np.min(image)
     image *= 255 / np.max(image)
     image = np.astype(image, np.uint8)
+
+    assert image.shape[0] == image.shape[1]
     return image
 
 
@@ -173,14 +160,36 @@ class App:
 
     def mark(self, present: bool):
         assert present is not None
+        idx = self.unscored_idxs[self.current_index]
 
-        self.csvdf.at[self.unscored_idxs[self.current_index], "human_score"] = (
-            1 if present else 0
-        )
+        if present:
+            self.csvdf.at[idx, "human_score"] = 1
+        else:
+            self.csvdf.at[idx, "human_score"] = 0
 
-        self.csvdf.to_csv(DATASET_CSV)
-
+        self.csvdf.to_csv(DATASET_CSV, index=False)
         self.next()
 
     def run(self):
         self.window.mainloop()
+
+        matched_cnt = 0
+        unmatched_cnt = 0
+
+        for idx in self.unscored_idxs:
+            if self.csvdf.at[idx, "human_score"] == -1:
+                continue
+
+            if (
+                bool(self.csvdf.at[idx, "human_score"])
+                == self.csvdf.at[idx, "signal_present"]
+            ):
+                matched_cnt += 1
+            else:
+                unmatched_cnt += 1
+
+        all_cnt = matched_cnt + unmatched_cnt
+
+        if all_cnt != 0:
+            print(f"Scored {all_cnt} images.")
+            print(f"Session precision: {matched_cnt * 100 / all_cnt:.1f}%.")

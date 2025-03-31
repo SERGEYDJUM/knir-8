@@ -187,7 +187,7 @@ def generate_phantom(
 
     phantom = np.zeros(shape, dtype=np.bool)
     ph_mid = shape[0] // 2, shape[1] // 2, shape[2] // 2
-    traj_deform = shape[1] / shape[0]
+    traj_deform = shape[1] / shape[0] * 0.95
 
     # objects_cfgs, texture_cfg = read_json_cfg(cfg_path)
     objects_cfgs, orbit = read_json_cfg(cfg_path)
