@@ -42,7 +42,8 @@ def main():
         hy[i] = row.human_score
         k[i] = row.recon_kernel == "soft"
 
-    X_train, y_train = X[k], y[k]
+    X_train, y_train = X[np.logical_not(k)], y[np.logical_not(k)]
+    # X_train, y_train = X[k], y[k]
     X_test, y_test = X[np.logical_not(k)], y[np.logical_not(k)]
 
     print(X_test.shape, X_train.shape)
@@ -56,5 +57,5 @@ def main():
     print("Model AUC mean:", measures.mean())
     print("Model AUC std:", measures.std())
 
-    print("Human train AUC:", metrics.roc_auc_score(y_train, hy[k]))
+    # print("Human train AUC:", metrics.roc_auc_score(y_train, hy[k]))
     print("Human test AUC:", metrics.roc_auc_score(y_test, hy[np.logical_not(k)]))

@@ -3,67 +3,67 @@
     "orbit": 285,
     "objects": [
         {
-            "mean_radius": 6,
+            "mean_radius": 8,
             "surface_frequency": 3,
             "surface_amplitude": 0.3,
             "y_deformation": 0.6
         },
         {
-            "mean_radius": 6,
+            "mean_radius": 8,
             "surface_frequency": 4,
             "surface_amplitude": 0.3,
             "x_deformation": 0.6
         },
         {
-            "mean_radius": 6,
+            "mean_radius": 8,
             "surface_frequency": 5,
             "surface_amplitude": 0.3,
             "y_deformation": 0.6
         },
         {
-            "mean_radius": 6,
+            "mean_radius": 8,
             "surface_frequency": 3,
             "surface_amplitude": 0.3,
             "x_deformation": 0.6
         },
         {
-            "mean_radius": 6,
+            "mean_radius": 8,
             "surface_frequency": 4,
             "surface_amplitude": 0.3,
             "y_deformation": 0.6
         },
         {
-            "mean_radius": 6,
+            "mean_radius": 8,
             "surface_frequency": 5,
             "surface_amplitude": 0.3,
             "x_deformation": 0.6
         },
         {
-            "mean_radius": 6,
+            "mean_radius": 8,
             "surface_frequency": 3,
             "surface_amplitude": 0.3,
             "y_deformation": 0.6
         },
         {
-            "mean_radius": 6,
+            "mean_radius": 8,
             "surface_frequency": 4,
             "surface_amplitude": 0.3,
             "x_deformation": 0.6
         },
         {
-            "mean_radius": 6,
+            "mean_radius": 8,
             "surface_frequency": 5,
             "surface_amplitude": 0.3,
             "y_deformation": 0.6
         },
         {
-            "mean_radius": 6,
+            "mean_radius": 8,
             "surface_frequency": 3,
             "surface_amplitude": 0.3,
             "x_deformation": 0.6
         },
         {
-            "mean_radius": 6,
+            "mean_radius": 8,
             "surface_frequency": 4,
             "surface_amplitude": 0.3,
             "y_deformation": 0.6
