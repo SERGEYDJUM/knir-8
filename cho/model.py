@@ -50,6 +50,7 @@ class CHO:
             self.ch_cfg = CHOChannelConfig()
 
         self.ch_cfg.adjust(channel_freq_mul, channel_width_mul)
+        self.channels = None
 
     def _build_channels(self, width: int, height: int) -> NDArray[np.float64]:
         thetas = [0, 45, 90, 135]
@@ -76,55 +77,56 @@ class CHO:
                     f".temp/channels/f{f:.2f}_w{w:.2f}_{theta}.png"
                 )
 
-        self.channels = channels
         return channels
 
+    def channel_responses(self, X: NDArray[np.float64]) -> NDArray[np.float64]:
+        responses = np.sum(self.channels[None, :, :, :] * X[:, None, :, :], axis=(2, 3))
+        return responses + np.random.normal(0, self.ch_noise_std, responses.shape)
+
     def train(self, X: NDArray[np.float64], y: NDArray[np.bool]) -> None:
-        channels = self._build_channels(X.shape[2], X.shape[1])
+        self.channels = self._build_channels(X.shape[2], X.shape[1])
 
         X_p: NDArray = X[y]
         X_n: NDArray = X[np.logical_not(y)]
 
-        Nu_p = np.sum(channels[None, :, :, :] * X_p[:, None, :, :], axis=(2, 3))
-        Nu_p += np.random.normal(0, self.ch_noise_std, Nu_p.shape)
+        U = self.channels.reshape((self.channels.shape[0], -1))
 
-        Nu_n = np.sum(channels[None, :, :, :] * X_n[:, None, :, :], axis=(2, 3))
-        Nu_n += np.random.normal(0, self.ch_noise_std, Nu_n.shape)
+        Nu_p = self.channel_responses(X_p)
+        K_nu_p = U @ (np.cov(X_p.reshape((X_p.shape[0], -1)), rowvar=False) @ U.T)
 
-        U = channels.reshape((channels.shape[0], channels.shape[1] * channels.shape[2]))
-        X_p = X_p.reshape((X_p.shape[0], X_p.shape[1] * X_p.shape[2]))
-        X_n = X_n.reshape((X_n.shape[0], X_n.shape[1] * X_n.shape[2]))
+        Nu_n = self.channel_responses(X_n)
+        K_nu_n = U @ (np.cov(X_n.reshape((X_n.shape[0], -1)), rowvar=False) @ U.T)
 
-        K_nu_p = U @ (np.cov(X_p, rowvar=False) @ U.T)
-        K_nu_n = U @ (np.cov(X_n, rowvar=False) @ U.T)
         K_nu = (K_nu_n + K_nu_p) / 2
         mean_nu = np.mean(Nu_p, axis=0) - np.mean(Nu_n, axis=0)
 
         self.template = np.linalg.inv(K_nu) @ mean_nu
 
     def test(self, X: NDArray[np.float64]) -> NDArray[np.float64]:
-        responses = np.sum(self.channels[None, :, :, :] * X[:, None, :, :], axis=(2, 3))
-        responses += np.random.normal(0, self.ch_noise_std, responses.shape)
-        t = np.sum(responses * self.template[np.newaxis, :], axis=1)
+        t = np.sum(self.channel_responses(X) * self.template[np.newaxis, :], axis=1)
         return t + np.random.normal(0, self.test_noise_std, t.shape)
 
     def measure(self, X: NDArray[np.float64], y: NDArray[np.bool]) -> float:
-        return float(metrics.roc_auc_score(y, self.test(X)))
+        t = self.test(X)
+        return max(
+            float(metrics.roc_auc_score(y, t)), float(metrics.roc_auc_score(y, -t))
+        )
 
 
 class CHOss(CHO):
     def train(self, X: NDArray[np.float64], y: NDArray[np.bool]) -> None:
-        channels = self._build_channels(X.shape[2], X.shape[1])
+        self.channels = self._build_channels(X.shape[2], X.shape[1])
 
         X_n: NDArray = X[np.logical_not(y)]
-
-        Nu_n = np.sum(channels[None, :, :, :] * X_n[:, None, :, :], axis=(2, 3))
-        Nu_n += np.random.normal(0, self.ch_noise_std, Nu_n.shape)
-
-        U = channels.reshape((channels.shape[0], channels.shape[1] * channels.shape[2]))
+        Nu_n = self.channel_responses(X_n)
+        U = self.channels.reshape((self.channels.shape[0], -1))
         X_n = X_n.reshape((X_n.shape[0], X_n.shape[1] * X_n.shape[2]))
-
         K_nu_n = U @ (np.cov(X_n, rowvar=False) @ U.T)
-        mean_nu = np.mean(Nu_n, axis=0)
 
-        self.template = np.linalg.inv(K_nu_n) @ mean_nu
+        self.mean_nu_n = np.mean(Nu_n, axis=0)
+        self.inv_cov_n = np.linalg.inv(K_nu_n)
+
+    def test(self, X: NDArray[np.float64]) -> NDArray[np.float64]:
+        responses = self.channel_responses(X) - self.mean_nu_n
+        t = np.sum(responses.T * (self.inv_cov_n @ responses.T), axis=0)
+        return t + np.random.normal(0, self.test_noise_std, t.shape)

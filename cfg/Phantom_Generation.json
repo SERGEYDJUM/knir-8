@@ -1,5 +1,5 @@
 {
-    "material": "ncat_air",
+    "material": "CIRS_lung_inhale",
     "orbit": 300,
     "objects": [
         {
@@ -59,6 +59,11 @@
             "surface_frequency": 3,
             "surface_amplitude": 0.3,
             "x_deformation": 0.4
+        },
+        {
+            "mean_radius": 5,
+            "surface_frequency": 0,
+            "surface_amplitude": 0
         }
     ]
 }

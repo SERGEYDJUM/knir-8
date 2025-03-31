@@ -4,10 +4,10 @@
 dataset
 !dataset/.gitkeep
 
-cfg
-!cfg/CatSim.cfg
-!cfg/Base_Phantom_Descriptor.json
-!cfg/Phantom_Generation.json
+cfg/Phantom_Descriptor.json
+cfg/Phantom_NS_Descriptor.json
+cfg/layers/*
+!cfg/layers/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

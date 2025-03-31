@@ -12,15 +12,15 @@
 		"ncat_cartilage"
 	],
 	"volumefractionmap_filename": [
-		"adult_male_50percentile_chest.density_0.raw",
-		"adult_male_50percentile_chest.density_1.raw",
-		"adult_male_50percentile_chest.density_2.raw",
-		"adult_male_50percentile_chest.density_3.raw",
-		"adult_male_50percentile_chest.density_4.raw",
-		"adult_male_50percentile_chest.density_5.raw",
-		"adult_male_50percentile_chest.density_6.raw",
-		"adult_male_50percentile_chest.density_7.raw",
-		"adult_male_50percentile_chest.density_14.raw"
+		"layers/adult_male_50percentile_chest.density_0.raw",
+		"layers/adult_male_50percentile_chest.density_1.raw",
+		"layers/adult_male_50percentile_chest.density_2.raw",
+		"layers/adult_male_50percentile_chest.density_3.raw",
+		"layers/adult_male_50percentile_chest.density_4.raw",
+		"layers/adult_male_50percentile_chest.density_5.raw",
+		"layers/adult_male_50percentile_chest.density_6.raw",
+		"layers/adult_male_50percentile_chest.density_7.raw",
+		"layers/adult_male_50percentile_chest.density_14.raw"
 	],
 	"volumefractionmap_datatype": [
 		"int8",

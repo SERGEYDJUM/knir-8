@@ -1,3 +1,4 @@
+from cho.model import CHOss
 from labeling.labeling import rawread, load_dataset, DATASET_RAWS
 from sklearn import metrics
 from cho import CHO
@@ -7,7 +8,8 @@ import numpy as np
 
 def main():
     df, _ = load_dataset()
-    df = df[df["human_score"] != -1]
+    # df = df[df["human_score"] != -1]
+    df = df[df["bbox_index"].isin((1, 2, 4, 5, 6, 7, 10))]
     roi_radius = 32
     shift_r = 4
 
@@ -15,6 +17,7 @@ def main():
 
     X = np.zeros((df.shape[0], roi_radius * 2, roi_radius * 2), dtype=np.single)
     y = np.zeros(df.shape[0], dtype=np.bool)
+    k = np.zeros(df.shape[0], dtype=np.bool)
     hy = np.zeros(df.shape[0], dtype=np.bool)
 
     for i, row in enumerate(df.itertuples()):
@@ -37,23 +40,21 @@ def main():
 
         y[i] = row.signal_present
         hy[i] = row.human_score
+        k[i] = row.recon_kernel == "soft"
 
-    model = CHO(channel_noise_std=4, test_stat_noise_std=12)
-    # model.train(X[0::2, :, :], y[0::2])
-    model.train(X, y)
+    X_train, y_train = X[k], y[k]
+    X_test, y_test = X[np.logical_not(k)], y[np.logical_not(k)]
 
-    # print("Template:", model.template)
-    print("Template sum:", model.template.sum())
+    print(X_test.shape, X_train.shape)
+    model = CHOss(channel_noise_std=1, test_stat_noise_std=1)
+    measures = np.zeros(shape=128, dtype=np.float64)
 
-    measures = []
-    measures_cnt = 100
-    # X_test = X[1::2]
-    # y_test = y[1::2]
-    X_test = X
-    y_test = y
+    for i in range(measures.shape[0]):
+        model.train(X_train, y_train)
+        measures[i] = model.measure(X_test, y_test)
 
-    for i in range(measures_cnt):
-        measures.append(model.measure(X_test, y_test))
+    print("Model AUC mean:", measures.mean())
+    print("Model AUC std:", measures.std())
 
-    print("Model AUC:", sum(measures) / measures_cnt)
-    print("Human AUC:", metrics.roc_auc_score(y, hy))
+    print("Human train AUC:", metrics.roc_auc_score(y_train, hy[k]))
+    print("Human test AUC:", metrics.roc_auc_score(y_test, hy[np.logical_not(k)]))

@@ -38,6 +38,16 @@ def load_dataset() -> tuple[DataFrame, list[int]]:
     unscored_indexes = csvdf.index[csvdf["human_score"] == -1].tolist()
     shuffle(unscored_indexes)
     shuffle(unscored_indexes)
+
+    marked = csvdf[csvdf["human_score"] != -1]
+
+    if len(marked) > 2:
+        matched = marked["human_score"].to_numpy(dtype=np.bool) == marked[
+            "signal_present"
+        ].to_numpy(dtype=np.bool)
+
+        print(f"Current marked precision: {matched.sum()/len(matched)}")
+
     return csvdf, unscored_indexes
 
 
@@ -47,7 +57,7 @@ def load_image(df: DataFrame, row_idx: int) -> NDArray:
     row = df.iloc[row_idx]
     raw_name = row["raw_source"]
     center = row["bbox_center_x"], row["bbox_center_y"]
-    radius = max(row["bbox_safe_r_x"], row["bbox_safe_r_x"])
+    radius = int(max(row["bbox_safe_r_x"], row["bbox_safe_r_y"]) * 1.2)
 
     if raw_name not in image_cache:
         raw_path = path.join(DATASET_RAWS, raw_name)
@@ -65,8 +75,8 @@ def load_image(df: DataFrame, row_idx: int) -> NDArray:
     # )
 
     image = tomo_slice[
-        center[1] - radius : center[1] + radius,
-        center[0] - radius : center[0] + radius,
+        max(center[1] - radius, 0) : center[1] + radius,
+        max(center[0] - radius, 0) : center[0] + radius,
     ].copy()
 
     if np.random.uniform(0, 1) > 0.5:

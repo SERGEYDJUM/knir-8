@@ -47,9 +47,9 @@ def process_signals(mask, bboxes, bg_tex_mask, save_mask: bool = False) -> Phant
     # x, y = np.mgrid[:size, :size]
     # allowed_circle = ((x - size // 2) ** 2 + (y - size // 2) ** 2) < (size // 2) ** 2
 
-    empty_mask = np.ones_like(bg_tex_mask) - bg_tex_mask
-    save_raw(empty_mask, path.join(CFGDIR, "dro_phantom_bg_empty.raw"))
-    save_raw(bg_tex_mask, path.join(CFGDIR, "dro_phantom_t_empty.raw"))
+    # empty_mask = np.ones_like(bg_tex_mask) - bg_tex_mask
+    # save_raw(empty_mask, path.join(CFGDIR, "dro_phantom_bg_empty.raw"))
+    # save_raw(bg_tex_mask, path.join(CFGDIR, "dro_phantom_t_empty.raw"))
 
     if save_mask:
         img = Image.fromarray((mask[z_slices // 2, :, :].astype(np.uint8) * 255))
@@ -73,9 +73,9 @@ def process_signals(mask, bboxes, bg_tex_mask, save_mask: bool = False) -> Phant
         img = Image.fromarray((bg_tex_mask[z_slices // 2, :, :].astype(np.uint8) * 255))
         img.save(path.join(WORKDIR, f"tex_mask_{z_slices // 2}.png"))
 
-    save_raw(mask, path.join(CFGDIR, "dro_phantom_mask.raw"))
-    save_raw(inv_mask, path.join(CFGDIR, "dro_phantom_water_mask.raw"))
-    save_raw(bg_tex_mask, path.join(CFGDIR, "dro_phantom_tex_mask.raw"))
+    save_raw(mask, path.join(CFGDIR, "layers/dro_phantom_mask.raw"))
+    # save_raw(inv_mask, path.join(CFGDIR, "dro_phantom_water_mask.raw"))
+    # save_raw(bg_tex_mask, path.join(CFGDIR, "dro_phantom_tex_mask.raw"))
 
     return Phantom(bboxes)
 
@@ -181,7 +181,7 @@ def patched_phantom(save_mask: bool = False):
 
     ph_cfg["n_materials"] += 1
     ph_cfg["mat_name"].append(material)
-    ph_cfg["volumefractionmap_filename"].append("dro_phantom_mask.raw")
+    ph_cfg["volumefractionmap_filename"].append("layers/dro_phantom_mask.raw")
     ph_cfg["volumefractionmap_datatype"].append("int8")
     ph_cfg["cols"].append(mask.shape[2])
     ph_cfg["rows"].append(mask.shape[1])
@@ -242,6 +242,7 @@ def parse_args() -> Namespace:
     parser.add_argument("-s", "--skipgen", action="store_true")
     parser.add_argument("-e", "--empty", action="store_true")
     parser.add_argument("--recon-only", action="store_true")
+    parser.add_argument("--no-write", action="store_true")
     parser.add_argument("-r", "--repeat", default=1, type=int)
     return parser.parse_args()
 
@@ -333,7 +334,8 @@ def main():
             with open(raw_path, "wb") as raw_file:
                 raw_file.write(tomogram)
 
-            bboxes.transform(
+            n_bboxes = deepcopy(bboxes)
+            n_bboxes.transform(
                 imscale,
                 (
                     bp_cols // 2,
@@ -350,7 +352,10 @@ def main():
             print(f"BBoxes scaled by {imscale:.3f}.")
 
             for slice_idx in range(tomogram.shape[0]):
-                for bb_idx, bbox in enumerate(bboxes.signals):
+                for bb_idx, bbox in enumerate(n_bboxes.signals):
+                    if args.no_write:
+                        continue
+
                     writer.writerow(
                         (
                             repeat_iter,
@@ -372,7 +377,7 @@ def main():
                     )
 
             if args.demo:
-                demo_reconstructed(tomogram, bboxes)
+                demo_reconstructed(tomogram, n_bboxes)
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ class MyDataset(Dataset):
     ) -> None:
         self.transforms = Compose(
             [
-                RandomCrop(img_r * 2),
+                # RandomCrop(img_r * 2),
                 RandomHorizontalFlip(),
                 RandomVerticalFlip(),
             ]
@@ -66,8 +66,10 @@ class MyDataset(Dataset):
                 cropped = self.transforms(
                     torch.from_numpy(
                         raw_img_cache[raw_name][row.slice_index][
-                            center[1] - sroi_r : center[1] + sroi_r,
-                            center[0] - sroi_r : center[0] + sroi_r,
+                            # center[1] - sroi_r : center[1] + sroi_r,
+                            center[1] - img_r : center[1] + img_r,
+                            # center[0] - sroi_r : center[0] + sroi_r,
+                            center[0] - img_r : center[0] + img_r,
                         ]
                     )
                 )

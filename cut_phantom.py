@@ -8,7 +8,7 @@ SRC_PATH = ".temp/uncut"
 S_H, S_W = 1050, 1700
 
 
-OUT_PATH = "./cfg"
+OUT_PATH = "./cfg/layers"
 RSLICES = 4
 FOV = 1280, 920
 FOV_R = FOV[0] // 2, FOV[1] // 2

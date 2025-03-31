@@ -13,25 +13,54 @@ from .data_load import MyDataset
 class CNNMO(nn.Module):
     def __init__(self):
         super(CNNMO, self).__init__()
-        self.conv_1 = nn.Conv2d(1, 16, 3)
-        self.conv_2 = nn.Conv2d(16, 8, 3)
-        self.dropout_1 = nn.Dropout(0.2)
-        self.lin_1 = nn.Linear(8 * 30**2, 128)
-        self.dropout_2 = nn.Dropout(0.5)
-        self.lin_2 = nn.Linear(128, 1)
 
-    def forward(self, x):
-        # Convolutions
+        input_size = 64
+
+        res_c = 16
+        conv_mid_c = 8
+        conv_out_c = 8
+        lin_mid_neurons = 128
+
+        lin_in_neurons = conv_out_c * (((input_size - 4) // 2) ** 2)
+
+        # ResNet Block
+        self.res_conv_1 = nn.Conv2d(
+            1, res_c, 3, padding=1, padding_mode="replicate", bias=False
+        )
+        self.res_bn = nn.BatchNorm2d(res_c)
+        self.res_conv_2 = nn.Conv2d(res_c, 1, 1, bias=False)
+
+        # Convolutional Block
+        self.conv_1 = nn.Conv2d(1, conv_mid_c, 3)
+        self.conv_2 = nn.Conv2d(conv_mid_c, conv_out_c, 3)
+
+        # Perceptron
+        self.dropout_1 = nn.Dropout(0.25)
+        self.lin_1 = nn.Linear(lin_in_neurons, lin_mid_neurons)
+        self.dropout_2 = nn.Dropout(0.5)
+        self.lin_2 = nn.Linear(lin_mid_neurons, 1)
+
+    def res_forward(self, x):
+        r = self.res_conv_1(x)
+        r = F.relu(self.res_bn(r))
+        r = self.res_conv_2(r)
+        return F.relu(r + x.reshape_as(r))
+
+    def convs_forward(self, x):
         x = F.relu(self.conv_1(x))
         x = F.relu(self.conv_2(x))
         x = F.max_pool2d(x, 2)
+        return torch.flatten(x, 1)
 
-        # Perceptron
-        x = torch.flatten(x, 1)
+    def perceptron_forward(self, x):
         x = F.relu(self.lin_1(self.dropout_1(x)))
         x = self.lin_2(self.dropout_2(x))
+        return x
 
-        # Output logits
+    def forward(self, x):
+        x = self.res_forward(x)
+        x = self.convs_forward(x)
+        x = self.perceptron_forward(x)
         return x
 
 
