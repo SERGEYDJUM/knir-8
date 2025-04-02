@@ -33,6 +33,8 @@ class MyDataset(Dataset):
 
         df, _ = load_dataset()
 
+        assert len(df[df["human_score"] == -1]) == 0
+
         raw_img_cache = dict()
 
         for i, row in enumerate(df.itertuples()):
@@ -57,6 +59,7 @@ class MyDataset(Dataset):
 
         self.X = torch.zeros((N, 1, img_r * 2, img_r * 2), dtype=torch.float32)
         self.y = torch.zeros((N, 1), dtype=torch.float32)
+        self.gt = torch.zeros((N, 1), dtype=torch.float32)
 
         for i, row in enumerate(df.itertuples()):
             raw_name = row.raw_source
@@ -75,7 +78,8 @@ class MyDataset(Dataset):
                 )
 
                 self.X[i * augments + j, 0] = cropped * value_scale
-                self.y[i * augments + j, 0] = 1.0 if row.signal_present else 0.0
+                self.y[i * augments + j, 0] = row.human_score
+                self.gt[i * augments + j, 0] = 1.0 if row.signal_present else 0.0
 
         del raw_img_cache
 
@@ -83,7 +87,7 @@ class MyDataset(Dataset):
         return len(self.y)
 
     def __getitem__(self, idx) -> tuple:
-        return (self.X[idx], self.y[idx])
+        return (self.X[idx], self.y[idx], self.gt[idx])
 
     def __getitems__(self, indices: list[int]) -> list[tuple]:
-        return list(map(lambda idx: (self.X[idx], self.y[idx]), indices))
+        return list(map(lambda idx: (self.X[idx], self.y[idx], self.gt[idx]), indices))

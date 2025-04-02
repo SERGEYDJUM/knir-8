@@ -70,7 +70,7 @@ def train(model, device, train_loader, optimizer, epoch):
     loss_sum = 0
     batches = 0
 
-    for i, (data, target) in enumerate(train_loader):
+    for i, (data, target, _) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
 
         optimizer.zero_grad()
@@ -89,7 +89,7 @@ def test(model, device, test_loader):
     model.eval()
 
     with torch.no_grad():
-        for data, target in test_loader:
+        for data, target, gt in test_loader:
             pred, target = model(data.to(device)), target.to(device)
 
             matched = (
@@ -98,10 +98,13 @@ def test(model, device, test_loader):
                 .mean()
             )
 
-            auc = roc_auc_score(target.flatten().cpu(), pred.flatten().cpu())
+            print(f"\tTest set precision: {matched * 100:.2f}%")
 
-            print(f"\tTest set classification precision: {matched * 100:.2f}%")
-            print(f"\tTest set AUC: {auc:.4f}")
+            auc = roc_auc_score(gt.cpu(), pred.flatten().cpu())
+            print(f"\tTest set ROC AUC: {auc:.4f}")
+
+            auc = roc_auc_score(target.cpu(), pred.flatten().cpu())
+            print(f"\tTest set target ROC AUC: {auc:.4f}")
 
 
 def parse_args():
@@ -123,7 +126,7 @@ def parse_args():
     parser.add_argument(
         "--epochs",
         type=int,
-        default=8,
+        default=10,
         metavar="N",
         help="number of epochs to train (default: 10)",
     )
@@ -137,7 +140,7 @@ def parse_args():
     parser.add_argument(
         "--gamma",
         type=float,
-        default=0.96,
+        default=0.98,
         metavar="M",
         help="Learning rate step gamma (default: 0.7)",
     )
@@ -176,14 +179,14 @@ def main():
     torch.manual_seed(args.seed)
 
     train_loader = torch.utils.data.DataLoader(
-        MyDataset(train=True, augments=40),
+        MyDataset(train=True, augments=8),
         batch_size=args.batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
     )
 
     test_loader = torch.utils.data.DataLoader(
-        MyDataset(train=False, augments=20),
+        MyDataset(train=False, augments=8),
         batch_size=args.test_batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,

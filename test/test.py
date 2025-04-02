@@ -47,7 +47,7 @@ def main():
     X_test, y_test = X[np.logical_not(k)], y[np.logical_not(k)]
 
     # print(X_test.shape, X_train.shape)
-    model = CHO(channel_noise_std=4, test_stat_noise_std=8)
+    model = CHOss(channel_noise_std=4, test_stat_noise_std=4)
     measurments = np.zeros(shape=128, dtype=np.float64)
 
     for i in range(measurments.shape[0]):
@@ -58,4 +58,4 @@ def main():
     print(f"Model AUC std: {measurments.std():.3f}")
 
     # print("Human train AUC:", metrics.roc_auc_score(y_train, hy[k]))
-    # print("Human test AUC:", metrics.roc_auc_score(y_test, hy[np.logical_not(k)]))
+    print("Human test AUC:", metrics.roc_auc_score(y_test, hy[np.logical_not(k)]))

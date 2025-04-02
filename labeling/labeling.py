@@ -70,6 +70,10 @@ def load_image(df: DataFrame, row_idx: int) -> NDArray:
     if np.random.uniform(0, 1) > 0.5:
         image = np.flipud(image)
 
+    print(
+        f"Brightness distribution: {image.min():.1f}:{image.max():.1f}, Avg: {image.mean():.1f}\n"
+    )
+    image = np.clip(image, -1000, 1000)
     image -= np.min(image)
     image *= 255 / np.max(image)
     image = np.astype(image, np.uint8)
@@ -135,6 +139,7 @@ class App:
             self.current_index = max(0, self.current_index - 1)
         else:
             if self.current_index == len(self.unscored_idxs) - 1:
+                self.on_shutdown()
                 exit(0)
 
             self.current_index = min(
@@ -170,9 +175,7 @@ class App:
         self.csvdf.to_csv(DATASET_CSV, index=False)
         self.next()
 
-    def run(self):
-        self.window.mainloop()
-
+    def on_shutdown(self):
         matched_cnt = 0
         unmatched_cnt = 0
 
@@ -193,3 +196,7 @@ class App:
         if all_cnt != 0:
             print(f"Scored {all_cnt} images.")
             print(f"Session precision: {matched_cnt * 100 / all_cnt:.1f}%.")
+
+    def run(self):
+        self.window.mainloop()
+        self.on_shutdown()
