@@ -100,8 +100,8 @@ def test(model, device, test_loader):
 
             auc = roc_auc_score(target.flatten().cpu(), pred.flatten().cpu())
 
-            print(f"\tTest set class separation: {matched * 100:.2f}%")
-            print(f"\tTest set ROC AUC: {auc:.4f}")
+            print(f"\tTest set classification precision: {matched * 100:.2f}%")
+            print(f"\tTest set AUC: {auc:.4f}")
 
 
 def parse_args():

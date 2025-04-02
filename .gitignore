@@ -8,6 +8,7 @@ cfg/Phantom_Descriptor.json
 cfg/Phantom_NS_Descriptor.json
 cfg/layers/*
 !cfg/layers/.gitkeep
+!cfg/layers/zipped_layers.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

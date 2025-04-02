@@ -17,7 +17,8 @@ from .utils import Phantom, save_raw
 from .dro_generator import generate_phantom
 
 WORKDIR = path.abspath("./.temp")
-CFGDIR = path.abspath("./cfg")
+CFG_C_DIR = path.abspath("./cfg")
+CFGDIR = path.join(CFG_C_DIR, "cfg_0")
 DATASET_DIR = path.abspath("./dataset")
 EXPERIMENT_PREFIX = path.join(WORKDIR, "MAIN")
 
@@ -73,7 +74,7 @@ def process_signals(mask, bboxes, bg_tex_mask, save_mask: bool = False) -> Phant
         img = Image.fromarray((bg_tex_mask[z_slices // 2, :, :].astype(np.uint8) * 255))
         img.save(path.join(WORKDIR, f"tex_mask_{z_slices // 2}.png"))
 
-    save_raw(mask, path.join(CFGDIR, "layers/dro_phantom_mask.raw"))
+    save_raw(mask, path.join(CFG_C_DIR, "layers/dro_phantom_mask.raw"))
     # save_raw(inv_mask, path.join(CFGDIR, "dro_phantom_water_mask.raw"))
     # save_raw(bg_tex_mask, path.join(CFGDIR, "dro_phantom_tex_mask.raw"))
 
@@ -128,13 +129,13 @@ def opt_write_layer(layer: NDArray, idx: int, cfg: dict, postfix: str) -> dict:
     cfg["cols"][idx] = opt_layer.shape[2]
     cfg["volumefractionmap_filename"][idx] += postfix
 
-    xc.rawwrite(path.join(CFGDIR, cfg["volumefractionmap_filename"][idx]), opt_layer)
+    xc.rawwrite(path.join(CFG_C_DIR, cfg["volumefractionmap_filename"][idx]), opt_layer)
     return cfg
 
 
 def patched_phantom(save_mask: bool = False):
     ph_g_path = path.join(CFGDIR, "Phantom_Generation.json")
-    b_p_path = path.join(CFGDIR, "Base_Phantom_Descriptor.json")
+    b_p_path = path.join(CFG_C_DIR, "Base_Phantom_Descriptor.json")
 
     material = json.load(open(ph_g_path))["material"]
     ph_cfg = json.load(open(b_p_path))
@@ -162,7 +163,9 @@ def patched_phantom(save_mask: bool = False):
             ph_cfg["cols"][i],
         )
 
-        layer = xc.rawread(path.join(CFGDIR, vfm_fname), (slices, rows, cols), "int8")
+        layer = xc.rawread(
+            path.join(CFG_C_DIR, vfm_fname), (slices, rows, cols), "int8"
+        )
         midpoint = layer.shape[1] // 2, layer.shape[2] // 2
         mask_r = mask.shape[1] // 2, mask.shape[2] // 2
 
@@ -176,7 +179,7 @@ def patched_phantom(save_mask: bool = False):
 
         ph_cfg = opt_write_layer(layer, i, ph_cfg, ".patched")
 
-    with open(path.join(CFGDIR, "Phantom_NS_Descriptor.json"), "w") as cfg_file:
+    with open(path.join(CFG_C_DIR, "Phantom_NS_Descriptor.json"), "w") as cfg_file:
         json.dump(ns_ph_cfg, cfg_file)
 
     ph_cfg["n_materials"] += 1
@@ -193,7 +196,7 @@ def patched_phantom(save_mask: bool = False):
     ph_cfg["y_offset"].append(mask.shape[1] // 2)
     ph_cfg["z_offset"].append(mask.shape[0] // 2)
 
-    with open(path.join(CFGDIR, "Phantom_Descriptor.json"), "w") as cfg_file:
+    with open(path.join(CFG_C_DIR, "Phantom_Descriptor.json"), "w") as cfg_file:
         json.dump(ph_cfg, cfg_file)
 
     return bboxes
@@ -244,18 +247,20 @@ def parse_args() -> Namespace:
     parser.add_argument("--recon-only", action="store_true")
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument("-r", "--repeat", default=1, type=int)
+    parser.add_argument("--cfg-dir", default="cfg_0", type=str)
+
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-
-    catsim_paths.add_search_path(path.abspath(CFGDIR))
+    CFGDIR = path.join(CFG_C_DIR, args.cfg_dir)
+    catsim_paths.add_search_path(path.abspath(CFG_C_DIR))
 
     bbox_cache = path.join(WORKDIR, "bboxes.json")
     catsim_cfg = path.join(CFGDIR, "CatSim.cfg")
     phantomgen_cfg = path.join(CFGDIR, "Phantom_Generation.json")
-    base_phantom_cfg = path.join(CFGDIR, "Base_Phantom_Descriptor.json")
+    base_phantom_cfg = path.join(CFG_C_DIR, "Base_Phantom_Descriptor.json")
 
     dataset_csv = path.join(DATASET_DIR, "dataset.csv")
     dataset_cfgs = path.join(DATASET_DIR, "cfgs")
