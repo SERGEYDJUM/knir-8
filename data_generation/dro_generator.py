@@ -187,13 +187,13 @@ def generate_phantom(
 
     phantom = np.zeros(shape, dtype=np.bool)
     ph_mid = shape[0] // 2, shape[1] // 2, shape[2] // 2
-    traj_deform = shape[1] / shape[0] * 0.95
+    traj_deform = shape[1] / shape[0]
 
     # objects_cfgs, texture_cfg = read_json_cfg(cfg_path)
     objects_cfgs, orbit = read_json_cfg(cfg_path)
     # tex_cutoff = texture_cfg["noise_cutoff"]
 
-    angle_s = 2 * np.pi / (len(objects_cfgs) - 1)
+    angle_s = 2 * np.pi / (len(objects_cfgs) - 3)
     safe_r = int(orbit * np.cos(np.pi / 2 - angle_s / 2))
 
     if safe_r <= roi_radius:
@@ -203,6 +203,8 @@ def generate_phantom(
 
     for i, ocfg in enumerate(objects_cfgs):
         obj_mean_r = ocfg["mean_radius"][0]
+        obj_x_pos = ocfg["x_pos"][0]
+        obj_y_pos = ocfg["y_pos"][0]
         obj_amplitude = ocfg["surface_amplitude"][0]
         obj_x_deform = ocfg["x_deformation"][0]
         obj_y_deform = ocfg["y_deformation"][0]
@@ -235,11 +237,11 @@ def generate_phantom(
             m_zcut - m_zcut_r : m_zcut + m_zcut_r,
         ]
 
-        xc = int(orbit * traj_deform * np.cos(-angle_s * (i - 1))) + ph_mid[1]
-        yc = int(orbit * np.sin(-angle_s * (i - 1))) + ph_mid[0]
+        xc = int(orbit * traj_deform * obj_x_pos)
+        yc = int(orbit * obj_y_pos)
 
-        if i == 0:
-            xc, yc = ph_mid[1], ph_mid[0]
+        xc += ph_mid[1]
+        yc += ph_mid[0]
 
         xi, yi = xc - safe_r, yc - safe_r
         xo, yo = xc + safe_r, yc + safe_r

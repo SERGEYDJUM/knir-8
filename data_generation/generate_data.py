@@ -231,8 +231,8 @@ def demo_reconstructed(
         draw = ImageDraw.Draw(image)
         for bbox in bboxes.signals:
             # draw.rectangle(bbox.bbox(), outline=(0, 255, 0))
-            draw.rectangle(bbox.roi_bbox(), outline=(0, 0, 0))
-            draw.rectangle(bbox.safe_bbox(), outline=(0, 0, 255))
+            draw.rectangle(bbox.roi_bbox(), outline=(0, 0, 255))
+            draw.rectangle(bbox.safe_bbox(), outline=(0, 0, 0))
         image.save(path.join(demo_dir, f"{name_prefix}_slice_{i}.png"))
 
 
