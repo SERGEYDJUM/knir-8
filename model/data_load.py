@@ -18,10 +18,11 @@ class MyDataset(Dataset):
         self,
         img_r: int = 32,
         train: bool = True,
-        train_split: float = 0.85,
+        train_split: float = 0.9,
         augments: int = 4,
         value_scale: float = 0.001,
-        extra_roi_mult: float = 1.32,
+        extra_roi_mult: float = 1.1,
+        random_state: int = 1,
     ) -> None:
         self.transforms = Compose(
             [
@@ -44,6 +45,8 @@ class MyDataset(Dataset):
                 raw_path = path.join(DATASET_RAWS, raw_name)
                 max_slice = df[df["raw_source"] == raw_name]["slice_index"].max()
                 raw_img_cache[raw_name] = rawread(raw_path, (max_slice + 1, 512, 512))
+
+        df = df.sample(frac=1, random_state=random_state).reset_index(drop=True)
 
         N = int((df.shape[0] * (train_split if train else (1 - train_split))) / 2)
         df_p = df[df["signal_present"] == True].reset_index(drop=True)

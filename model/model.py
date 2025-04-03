@@ -9,6 +9,8 @@ import torch
 
 from .data_load import MyDataset
 
+_precision_record = 0
+
 
 class CNNMO(nn.Module):
     def __init__(self):
@@ -17,9 +19,9 @@ class CNNMO(nn.Module):
         input_size = 64
 
         res_c = 16
-        conv_mid_c = 8
-        conv_out_c = 8
-        lin_mid_neurons = 128
+        conv_mid_c = 16
+        conv_out_c = 32
+        lin_mid_neurons = 64
 
         lin_in_neurons = conv_out_c * (((input_size - 4) // 2) ** 2)
 
@@ -42,9 +44,9 @@ class CNNMO(nn.Module):
 
     def res_forward(self, x):
         r = self.res_conv_1(x)
-        r = F.relu(self.res_bn(r))
+        r = F.elu(self.res_bn(r))
         r = self.res_conv_2(r)
-        return F.relu(r + x.reshape_as(r))
+        return F.elu(r + x.reshape_as(r))
 
     def convs_forward(self, x):
         x = F.relu(self.conv_1(x))
@@ -86,6 +88,7 @@ def train(model, device, train_loader, optimizer, epoch):
 
 
 def test(model, device, test_loader):
+    global _precision_record
     model.eval()
 
     with torch.no_grad():
@@ -100,11 +103,15 @@ def test(model, device, test_loader):
 
             print(f"\tTest set precision: {matched * 100:.2f}%")
 
-            auc = roc_auc_score(gt.cpu(), pred.flatten().cpu())
-            print(f"\tTest set ROC AUC: {auc:.4f}")
+            pred, target = pred.flatten().cpu(), target.cpu()
 
-            auc = roc_auc_score(target.cpu(), pred.flatten().cpu())
-            print(f"\tTest set target ROC AUC: {auc:.4f}")
+            auc = roc_auc_score(gt.cpu(), pred)
+            print(f"\tTest ROC AUC as Model Observer: {auc:.4f}")
+
+            hauc = roc_auc_score(target, pred)
+            print(f"\tTest ROC AUC as classifier: {hauc:.4f}")
+
+            _precision_record = max(hauc, _precision_record)
 
 
 def parse_args():
@@ -126,7 +133,7 @@ def parse_args():
     parser.add_argument(
         "--epochs",
         type=int,
-        default=10,
+        default=32,
         metavar="N",
         help="number of epochs to train (default: 10)",
     )
@@ -140,7 +147,7 @@ def parse_args():
     parser.add_argument(
         "--gamma",
         type=float,
-        default=0.98,
+        default=0.99,
         metavar="M",
         help="Learning rate step gamma (default: 0.7)",
     )
@@ -167,6 +174,7 @@ def parse_args():
 
 
 def main():
+    global _precision_record
     args = parse_args()
 
     device = torch.device("cpu")
@@ -179,14 +187,14 @@ def main():
     torch.manual_seed(args.seed)
 
     train_loader = torch.utils.data.DataLoader(
-        MyDataset(train=True, augments=8),
+        MyDataset(train=True, augments=8, random_state=args.seed),
         batch_size=args.batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
     )
 
     test_loader = torch.utils.data.DataLoader(
-        MyDataset(train=False, augments=8),
+        MyDataset(train=False, augments=8, random_state=args.seed),
         batch_size=args.test_batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
@@ -205,6 +213,8 @@ def main():
 
         if args.dry_run:
             break
+
+    print(f"Best classifier test AUC: {_precision_record:.3f}")
 
     if args.save_model:
         torch.save(model.state_dict(), "checkpoints/model.pt")
