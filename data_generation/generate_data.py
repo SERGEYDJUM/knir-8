@@ -18,9 +18,11 @@ from .dro_generator import generate_phantom
 
 WORKDIR = path.abspath("./.temp")
 CFG_C_DIR = path.abspath("./cfg")
-CFGDIR = path.join(CFG_C_DIR, "cfg_0")
 DATASET_DIR = path.abspath("./dataset")
 EXPERIMENT_PREFIX = path.join(WORKDIR, "MAIN")
+
+cfg_dir = path.join(CFG_C_DIR, "cfg_0")
+
 
 CSV_HEADER = (
     "raw_source",
@@ -134,7 +136,8 @@ def opt_write_layer(layer: NDArray, idx: int, cfg: dict, postfix: str) -> dict:
 
 
 def patched_phantom(save_mask: bool = False):
-    ph_g_path = path.join(CFGDIR, "Phantom_Generation.json")
+    global cfg_dir
+    ph_g_path = path.join(cfg_dir, "Phantom_Generation.json")
     b_p_path = path.join(CFG_C_DIR, "Base_Phantom_Descriptor.json")
 
     material = json.load(open(ph_g_path))["material"]
@@ -253,13 +256,14 @@ def parse_args() -> Namespace:
 
 
 def main():
+    global cfg_dir
     args = parse_args()
-    CFGDIR = path.join(CFG_C_DIR, args.cfg_dir)
+    cfg_dir = path.join(CFG_C_DIR, args.cfg_dir)
     catsim_paths.add_search_path(path.abspath(CFG_C_DIR))
 
     bbox_cache = path.join(WORKDIR, "bboxes.json")
-    catsim_cfg = path.join(CFGDIR, "CatSim.cfg")
-    phantomgen_cfg = path.join(CFGDIR, "Phantom_Generation.json")
+    catsim_cfg = path.join(cfg_dir, "CatSim.cfg")
+    phantomgen_cfg = path.join(cfg_dir, "Phantom_Generation.json")
     base_phantom_cfg = path.join(CFG_C_DIR, "Base_Phantom_Descriptor.json")
 
     dataset_csv = path.join(DATASET_DIR, "dataset.csv")
