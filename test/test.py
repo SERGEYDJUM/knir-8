@@ -8,6 +8,8 @@ import numpy as np
 
 def main():
     df, _ = load_dataset()
+    df = df[df["phantom_cfg_md5"] == "3d3fd108138ce807fecba23851bbf61b"]
+    df = df[df["xcist_cfg_md5"] == "721d432d930ce5b93997e51d249763b7"]
     # df = df[df["human_score"] != -1]
     # df = df[df["bbox_index"].isin((1, 2, 3, 4, 6, 7, 8, 9, 12))]
     roi_radius = 32
@@ -40,11 +42,13 @@ def main():
 
         y[i] = row.signal_present
         hy[i] = row.human_score
-        k[i] = row.recon_kernel == "soft"
+        # k[i] = row.recon_kernel == "soft"
 
-    X_train, y_train = X[np.logical_not(k)], y[np.logical_not(k)]
+    # X_train, y_train = X[np.logical_not(k)], y[np.logical_not(k)]
     # X_train, y_train = X[k], y[k]
-    X_test, y_test = X[np.logical_not(k)], y[np.logical_not(k)]
+    X_train, y_train = X, y
+    X_test, y_test = X, y
+    # X_test, y_test = X[np.logical_not(k)], y[np.logical_not(k)]
 
     # print(X_test.shape, X_train.shape)
     model = CHOss(channel_noise_std=4, test_stat_noise_std=4)
