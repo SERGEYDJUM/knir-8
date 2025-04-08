@@ -1,3 +1,4 @@
+from copy import deepcopy
 from itertools import product
 from dataclasses import dataclass
 from os import makedirs
@@ -87,9 +88,9 @@ class CHO:
         responses = np.sum(self.channels[None, :, :, :] * X[:, None, :, :], axis=(2, 3))
 
         if test:
-            responses += np.random.normal(
-                0, self.Nu_n_std * self.ch_noise_std, responses.shape
-            )
+            noise_std = self.Nu_n_std * self.ch_noise_std
+            noise_std = np.broadcast_to(noise_std, responses.shape)
+            responses += np.random.normal(0, noise_std, responses.shape)
 
         return responses
 
@@ -147,3 +148,37 @@ class CHOss(CHO):
         responses = self.channel_responses(X, test=True) - self.mean_nu_n
         t = np.sum(responses.T * (self.inv_cov_n @ responses.T), axis=0)
         return t + np.random.normal(0, self.test_noise_std, t.shape)
+
+
+class CHOArray:
+    def __init__(self, model: CHO | CHOss) -> None:
+        self.model_base = model
+        self.models: list[CHO] = []
+
+    def train(
+        self, X: NDArray[np.single], y: NDArray[np.bool], disc: NDArray[np.uint8]
+    ) -> None:
+
+        N_places = np.max(disc) + 1
+        self.models.clear()
+
+        for i in range(N_places):
+            place_mask = disc == i
+            model = deepcopy(self.model_base)
+            model.train(X[place_mask], y[place_mask])
+            self.models.append(model)
+
+    def test(
+        self, X: NDArray[np.single], disc: NDArray[np.uint8]
+    ) -> NDArray[np.single]:
+        output = np.zeros(X.shape[0], dtype=np.single)
+
+        for i, x_s, place_s in zip(range(X.shape[0]), X, disc):
+            output[i] = self.models[place_s].test(x_s[np.newaxis, :, :])[0]
+
+        return output
+
+    def measure(
+        self, X: NDArray[np.float64], y: NDArray[np.bool], disc: NDArray[np.uint8]
+    ) -> float:
+        return float(metrics.roc_auc_score(y, self.test(X, disc)))

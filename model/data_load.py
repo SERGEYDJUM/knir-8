@@ -23,7 +23,7 @@ class MyDataset(Dataset):
         value_scale: float = 0.001,
         extra_roi_mult: float = 1.1,
         random_state: int = 1,
-        allowed_kernel: str = "soft",
+        allowed_kernel: str = "standard",
     ) -> None:
         self.transforms = Compose(
             [

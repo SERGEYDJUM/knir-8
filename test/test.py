@@ -1,5 +1,5 @@
 from labeling.labeling import rawread, load_dataset, DATASET_RAWS
-from cho import CHO, CHOss
+from cho import CHO, CHOss, CHOArray
 from model import CNNMO
 
 from sklearn.metrics import roc_auc_score
@@ -14,7 +14,10 @@ import torch
 
 ROI_R: int = 32
 CNNMO_CP_PATH: str = "checkpoints/cnn_mo.pt"
-CNNMO_INP_PIXEL_MUL = 0.001
+CNNMO_PIXEL_MUL = 0.001
+
+CHO_NOISE_MUL = 0.5
+CHO_T_NOISE_STD = 1
 
 
 class DataStore:
@@ -75,21 +78,44 @@ def load_main_model() -> CNNMO:
 
 
 def measure_dist(
-    model: CHO | CHOss, X: NDArray, y: NDArray, n: int = 128
+    model: CHO | CHOss | CHOArray,
+    X: NDArray,
+    y: NDArray,
+    n: int = 128,
+    places: NDArray = None,
 ) -> tuple[float, float]:
     measurements = np.zeros(n, dtype=np.double)
 
     for i in range(n):
-        measurements[i] = model.measure(X, y)
+        if places is not None:
+            measurements[i] = model.measure(X, y, disc=places)
+        else:
+            measurements[i] = model.measure(X, y)
 
     return measurements.mean(), measurements.std()
 
 
 def measure_main(model: CNNMO, X: NDArray, y: NDArray) -> float:
     with torch.no_grad():
-        inp = torch.from_numpy(X * CNNMO_INP_PIXEL_MUL)
+        inp = torch.from_numpy(X * CNNMO_PIXEL_MUL)
         inp = inp.reshape((X.shape[0], 1, X.shape[1], X.shape[2]))
         return roc_auc_score(y, model(inp).flatten())
+
+
+def print_corrs(human_aucs: list, main_aucs: list, alt_aucs: list) -> None:
+    main_sc_s = spearmanr(human_aucs, main_aucs)
+    alt_sc_s = spearmanr(human_aucs, alt_aucs)
+
+    print(
+        f"\t\tSpearman correlation: Main={main_sc_s.statistic:.3f}, Alt={alt_sc_s.statistic:.3f}"
+    )
+
+    main_sc_p = pearsonr(human_aucs, main_aucs)
+    alt_sc_p = pearsonr(human_aucs, alt_aucs)
+
+    print(
+        f"\t\tPearson correlation: Main={main_sc_p.statistic:.3f}, Alt={alt_sc_p.statistic:.3f}"
+    )
 
 
 def main():
@@ -102,7 +128,19 @@ def main():
     big_objects = np.logical_not(small_objects)
 
     main_model = load_main_model()
-    alt_model = CHOss(channel_noise_std=1, test_stat_noise_std=1)
+
+    alt_model = CHOArray(
+        CHOss(
+            channel_noise_std=CHO_NOISE_MUL,
+            test_stat_noise_std=CHO_T_NOISE_STD,
+        )
+    )
+
+    alt_model.train(
+        data.x[kernel_standard],
+        data.y[kernel_standard],
+        data.s[kernel_standard],
+    )
 
     human_aucs = []
     main_aucs = []
@@ -124,23 +162,29 @@ def main():
         inp = data.x[ex_filter]
         gt = data.y[ex_filter]
         hy = data.hy[ex_filter]
+        places = data.s[ex_filter]
 
         assert inp.shape[0] == gt.shape[0] == hy.shape[0]
 
-        alt_model.train(inp, gt)
-
         human_auc = roc_auc_score(gt, hy)
         main_auc = measure_main(main_model, inp, gt)
-        alt_auc, alt_auc_std = measure_dist(alt_model, inp, gt)
+        alt_auc, alt_auc_std = measure_dist(
+            alt_model,
+            inp,
+            gt,
+            places=places if isinstance(alt_model, CHOArray) else None,
+        )
 
         print(
-            f"Human={human_auc:.3f}, Main={main_auc:.3f}, Alt={alt_auc:.3f} (Alt Std={alt_auc_std:.3f})"
+            f"\tHuman={human_auc:.3f}, Main={main_auc:.3f}, Alt={alt_auc:.3f} (Alt Std={alt_auc_std:.3f})"
         )
 
         human_aucs.append(human_auc)
         main_aucs.append(main_auc)
         alt_aucs.append(alt_auc)
         alt_auc_stds.append(alt_auc_std)
+
+    print("\nTrain set:")
 
     # Configuration #1
     perform_experiment(
@@ -170,6 +214,11 @@ def main():
         tube_current=40,
     )
 
+    print("\n\tTrain set correlations:")
+    print_corrs(human_aucs, main_aucs, alt_aucs)
+
+    print("\nTest set:")
+
     # Configuration #5
     perform_experiment(
         is_small_objects=True,
@@ -198,16 +247,8 @@ def main():
         tube_current=40,
     )
 
-    main_sc = spearmanr(human_aucs, main_aucs)
-    alt_sc = spearmanr(human_aucs, alt_aucs)
+    print("\n\tTest set correlations:")
+    print_corrs(human_aucs[4:], main_aucs[4:], alt_aucs[4:])
 
-    print(
-        f"Spearman correlation: Main={main_sc.statistic:.3f}, Alt={alt_sc.statistic:.3f}"
-    )
-
-    main_sc = pearsonr(human_aucs, main_aucs)
-    alt_sc = pearsonr(human_aucs, alt_aucs)
-
-    print(
-        f"Pearson correlation: Main={main_sc.statistic:.3f}, Alt={alt_sc.statistic:.3f}"
-    )
+    print("\nDataset correlations:")
+    print_corrs(human_aucs, main_aucs, alt_aucs)
