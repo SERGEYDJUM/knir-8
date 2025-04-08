@@ -19,10 +19,11 @@ class MyDataset(Dataset):
         img_r: int = 32,
         train: bool = True,
         train_split: float = 0.9,
-        augments: int = 4,
+        augments: int = 8,
         value_scale: float = 0.001,
         extra_roi_mult: float = 1.1,
         random_state: int = 1,
+        allowed_kernel: str = "soft",
     ) -> None:
         self.transforms = Compose(
             [
@@ -33,6 +34,7 @@ class MyDataset(Dataset):
         )
 
         df, _ = load_dataset()
+        df = df[df["recon_kernel"] == allowed_kernel]
 
         assert len(df[df["human_score"] == -1]) == 0
 

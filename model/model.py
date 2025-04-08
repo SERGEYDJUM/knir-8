@@ -18,10 +18,10 @@ class CNNMO(nn.Module):
 
         input_size = 64
 
-        res_c = 16
-        conv_mid_c = 16
+        res_c = 32
+        conv_mid_c = 32
         conv_out_c = 32
-        lin_mid_neurons = 64
+        lin_mid_neurons = 128
 
         lin_in_neurons = conv_out_c * (((input_size - 4) // 2) ** 2)
 
@@ -187,14 +187,14 @@ def main():
     torch.manual_seed(args.seed)
 
     train_loader = torch.utils.data.DataLoader(
-        MyDataset(train=True, augments=8, random_state=args.seed),
+        MyDataset(train=True, random_state=args.seed),
         batch_size=args.batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
     )
 
     test_loader = torch.utils.data.DataLoader(
-        MyDataset(train=False, augments=8, random_state=args.seed),
+        MyDataset(train=False, random_state=args.seed),
         batch_size=args.test_batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
@@ -217,4 +217,4 @@ def main():
     print(f"Best classifier test AUC: {_precision_record:.3f}")
 
     if args.save_model:
-        torch.save(model.state_dict(), "checkpoints/model.pt")
+        torch.save(model.state_dict(), "checkpoints/cnn_mo.pt")

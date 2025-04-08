@@ -79,9 +79,19 @@ class CHO:
 
         return channels
 
-    def channel_responses(self, X: NDArray[np.float64]) -> NDArray[np.float64]:
+    def channel_responses(
+        self,
+        X: NDArray[np.float64],
+        test: bool = False,
+    ) -> NDArray[np.float64]:
         responses = np.sum(self.channels[None, :, :, :] * X[:, None, :, :], axis=(2, 3))
-        return responses + np.random.normal(0, self.ch_noise_std, responses.shape)
+
+        if test:
+            responses += np.random.normal(
+                0, self.Nu_n_std * self.ch_noise_std, responses.shape
+            )
+
+        return responses
 
     def train(self, X: NDArray[np.float64], y: NDArray[np.bool]) -> None:
         self.channels = self._build_channels(X.shape[2], X.shape[1])
@@ -100,10 +110,15 @@ class CHO:
         K_nu = (K_nu_n + K_nu_p) / 2
         mean_nu = np.mean(Nu_p, axis=0) - np.mean(Nu_n, axis=0)
 
+        self.Nu_n_std = np.std(Nu_n, axis=0)
         self.template = np.linalg.inv(K_nu) @ mean_nu
 
     def test(self, X: NDArray[np.float64]) -> NDArray[np.float64]:
-        t = np.sum(self.channel_responses(X) * self.template[np.newaxis, :], axis=1)
+        t = np.sum(
+            self.channel_responses(X, test=True) * self.template[np.newaxis, :],
+            axis=1,
+        )
+
         return t + np.random.normal(0, self.test_noise_std, t.shape)
 
     def measure(self, X: NDArray[np.float64], y: NDArray[np.bool]) -> float:
@@ -119,14 +134,16 @@ class CHOss(CHO):
 
         X_n: NDArray = X[np.logical_not(y)]
         Nu_n = self.channel_responses(X_n)
+
         U = self.channels.reshape((self.channels.shape[0], -1))
         X_n = X_n.reshape((X_n.shape[0], X_n.shape[1] * X_n.shape[2]))
         K_nu_n = U @ (np.cov(X_n, rowvar=False) @ U.T)
 
         self.mean_nu_n = np.mean(Nu_n, axis=0)
+        self.Nu_n_std = np.std(Nu_n, axis=0)
         self.inv_cov_n = np.linalg.inv(K_nu_n)
 
     def test(self, X: NDArray[np.float64]) -> NDArray[np.float64]:
-        responses = self.channel_responses(X) - self.mean_nu_n
+        responses = self.channel_responses(X, test=True) - self.mean_nu_n
         t = np.sum(responses.T * (self.inv_cov_n @ responses.T), axis=0)
         return t + np.random.normal(0, self.test_noise_std, t.shape)
