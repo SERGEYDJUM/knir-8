@@ -31,7 +31,7 @@ class DataStore:
 
     def __init__(self) -> None:
         df, _ = load_dataset()
-        assert len(df[df["human_score"] == -1]) == 0
+        # assert len(df[df["human_score"] == -1]) == 0
 
         raws = {}
 
@@ -39,7 +39,7 @@ class DataStore:
         y = np.zeros(df.shape[0], dtype=np.bool)
         k = np.zeros(df.shape[0], dtype=np.bool)
         a = np.zeros(df.shape[0], dtype=np.uint8)
-        hy = np.zeros(df.shape[0], dtype=np.bool)
+        hy = np.zeros(df.shape[0], dtype=np.int8)
         o = np.zeros(df.shape[0], dtype=np.bool)
         s = np.zeros(df.shape[0], dtype=np.uint8)
 
@@ -129,19 +129,6 @@ def main():
 
     main_model = load_main_model()
 
-    alt_model = CHOArray(
-        CHOss(
-            channel_noise_std=CHO_NOISE_MUL,
-            test_stat_noise_std=CHO_T_NOISE_STD,
-        )
-    )
-
-    alt_model.train(
-        data.x[kernel_standard],
-        data.y[kernel_standard],
-        data.s[kernel_standard],
-    )
-
     human_aucs = []
     main_aucs = []
     alt_aucs = []
@@ -158,6 +145,21 @@ def main():
             kernel_f,
             np.logical_and(current_f, object_size_f),
         )
+
+        alt_model = CHOArray(
+            CHOss(
+                channel_noise_std=CHO_NOISE_MUL,
+                test_stat_noise_std=CHO_T_NOISE_STD,
+            )
+        )
+
+        alt_model.train(
+            data.x[ex_filter],
+            data.y[ex_filter],
+            data.s[ex_filter],
+        )
+
+        ex_filter = np.logical_and(ex_filter, data.hy != -1)
 
         inp = data.x[ex_filter]
         gt = data.y[ex_filter]

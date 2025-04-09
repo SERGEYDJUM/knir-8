@@ -34,9 +34,8 @@ class MyDataset(Dataset):
         )
 
         df, _ = load_dataset()
+        df = df[df["human_score"] != -1]
         df = df[df["recon_kernel"] == allowed_kernel]
-
-        assert len(df[df["human_score"] == -1]) == 0
 
         raw_img_cache = dict()
 
