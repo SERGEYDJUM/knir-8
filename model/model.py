@@ -19,9 +19,9 @@ class CNNMO(nn.Module):
         input_size = 64
 
         res_c = 32
-        conv_mid_c = 32
-        conv_out_c = 32
-        lin_mid_neurons = 128
+        conv_mid_c = 16
+        conv_out_c = 16
+        lin_mid_neurons = 64
 
         lin_in_neurons = conv_out_c * (((input_size - 4) // 2) ** 2)
 
@@ -187,14 +187,14 @@ def main():
     torch.manual_seed(args.seed)
 
     train_loader = torch.utils.data.DataLoader(
-        MyDataset(train=True, random_state=args.seed),
+        MyDataset(train=True, random_state=args.seed, train_split=1),
         batch_size=args.batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
     )
 
     test_loader = torch.utils.data.DataLoader(
-        MyDataset(train=False, random_state=args.seed),
+        MyDataset(train=False, random_state=args.seed, train_split=0),
         batch_size=args.test_batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,

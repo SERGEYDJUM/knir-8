@@ -16,8 +16,9 @@ ROI_R: int = 32
 CNNMO_CP_PATH: str = "checkpoints/cnn_mo.pt"
 CNNMO_PIXEL_MUL = 0.001
 
-CHO_NOISE_MUL = 0.5
+CHO_NOISE_MUL = 1.35
 CHO_T_NOISE_STD = 1
+CHO_TRAIN_SET_PART = 1
 
 
 class DataStore:
@@ -81,7 +82,7 @@ def measure_dist(
     model: CHO | CHOss | CHOArray,
     X: NDArray,
     y: NDArray,
-    n: int = 128,
+    n: int = 512,
     places: NDArray = None,
 ) -> tuple[float, float]:
     measurements = np.zeros(n, dtype=np.double)
@@ -107,15 +108,23 @@ def print_corrs(human_aucs: list, main_aucs: list, alt_aucs: list) -> None:
     alt_sc_s = spearmanr(human_aucs, alt_aucs)
 
     print(
-        f"\t\tSpearman correlation: Main={main_sc_s.statistic:.3f}, Alt={alt_sc_s.statistic:.3f}"
+        f"\t\tSpearman r: Main={main_sc_s.statistic:.3f}, Alt={alt_sc_s.statistic:.3f}"
     )
 
     main_sc_p = pearsonr(human_aucs, main_aucs)
     alt_sc_p = pearsonr(human_aucs, alt_aucs)
 
     print(
-        f"\t\tPearson correlation: Main={main_sc_p.statistic:.3f}, Alt={alt_sc_p.statistic:.3f}"
+        f"\t\tPearson r: Main={main_sc_p.statistic:.3f}, Alt={alt_sc_p.statistic:.3f}"
     )
+
+
+def adequacy_score(aucs: list[float], ref: list[float]) -> float:
+    assert len(aucs) == len(ref)
+    pear_r = pearsonr(aucs, ref).statistic
+    mse = sum(map(lambda t: (t[0] - t[1]) ** 2, zip(aucs, ref))) / len(ref)
+
+    return ((pear_r + 1) / 2) * (1 - mse)
 
 
 def main():
@@ -141,25 +150,29 @@ def main():
         object_size_f = small_objects if is_small_objects else big_objects
         kernel_f = kernel_soft if is_kernel_soft else kernel_standard
 
-        ex_filter = np.logical_and(
-            kernel_f,
-            np.logical_and(current_f, object_size_f),
-        )
-
         alt_model = CHOArray(
             CHOss(
                 channel_noise_std=CHO_NOISE_MUL,
                 test_stat_noise_std=CHO_T_NOISE_STD,
+                train_set_keep=CHO_TRAIN_SET_PART,
             )
         )
 
-        alt_model.train(
-            data.x[ex_filter],
-            data.y[ex_filter],
-            data.s[ex_filter],
+        train_filter = np.logical_and(
+            kernel_standard,
+            np.logical_and(current_f, object_size_f),
         )
 
-        ex_filter = np.logical_and(ex_filter, data.hy != -1)
+        alt_model.train(
+            data.x[train_filter],
+            data.y[train_filter],
+            data.s[train_filter],
+        )
+
+        ex_filter = np.logical_and(
+            np.logical_and(kernel_f, data.hy != -1),
+            np.logical_and(current_f, object_size_f),
+        )
 
         inp = data.x[ex_filter]
         gt = data.y[ex_filter]
@@ -178,7 +191,7 @@ def main():
         )
 
         print(
-            f"\tHuman={human_auc:.3f}, Main={main_auc:.3f}, Alt={alt_auc:.3f} (Alt Std={alt_auc_std:.3f})"
+            f"\t> Human={human_auc:.3f}, Main={main_auc:.3f}, Alt={alt_auc:.3f} (std_Alt={alt_auc_std:.3f})"
         )
 
         human_aucs.append(human_auc)
@@ -186,7 +199,7 @@ def main():
         alt_aucs.append(alt_auc)
         alt_auc_stds.append(alt_auc_std)
 
-    print("\nTrain set:")
+    print("\nTrain set AUCs:")
 
     # Configuration #1
     perform_experiment(
@@ -216,10 +229,14 @@ def main():
         tube_current=40,
     )
 
-    print("\n\tTrain set correlations:")
+    print("\n\tCorrelations:")
     print_corrs(human_aucs, main_aucs, alt_aucs)
 
-    print("\nTest set:")
+    ade_main = adequacy_score(main_aucs, human_aucs)
+    ade_alt = adequacy_score(alt_aucs, human_aucs)
+    print(f"\n\t=> Adequacy: Main={ade_main:.3f}, Alt={ade_alt:.3f}")
+
+    print("\nTest set AUCs:")
 
     # Configuration #5
     perform_experiment(
@@ -249,8 +266,16 @@ def main():
         tube_current=40,
     )
 
-    print("\n\tTest set correlations:")
+    print("\n\tCorrelations:")
     print_corrs(human_aucs[4:], main_aucs[4:], alt_aucs[4:])
 
-    print("\nDataset correlations:")
+    ade_main = adequacy_score(main_aucs[4:], human_aucs[4:])
+    ade_alt = adequacy_score(alt_aucs[4:], human_aucs[4:])
+    print(f"\n\t=> Adequacy: Main={ade_main:.3f}, Alt={ade_alt:.3f}")
+
+    print("\nEntire dataset:\n\t...")
     print_corrs(human_aucs, main_aucs, alt_aucs)
+
+    ade_main = adequacy_score(main_aucs, human_aucs)
+    ade_alt = adequacy_score(alt_aucs, human_aucs)
+    print(f"\n\t=> Adequacy: Main={ade_main:.3f}, Alt={ade_alt:.3f}")

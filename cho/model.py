@@ -37,11 +37,13 @@ class CHO:
         channel_width_mul: float = 1,
         channel_noise_std: float = 0,
         test_stat_noise_std: float = 0,
+        train_set_keep: float = 1,
         _debug_mode: bool = False,
     ) -> None:
         self.ch_cfg = channel_config
         self.ch_noise_std = channel_noise_std
         self.test_noise_std = test_stat_noise_std
+        self.tran_set_keep = train_set_keep
         self._debug_mode = _debug_mode
 
         if _debug_mode:
@@ -98,7 +100,10 @@ class CHO:
         self.channels = self._build_channels(X.shape[2], X.shape[1])
 
         X_p: NDArray = X[y]
+        X_p = X_p[: int(X_p.shape[0] * self.tran_set_keep)]
+
         X_n: NDArray = X[np.logical_not(y)]
+        X_n = X_n[: int(X_n.shape[0] * self.tran_set_keep)]
 
         U = self.channels.reshape((self.channels.shape[0], -1))
 
@@ -134,6 +139,8 @@ class CHOss(CHO):
         self.channels = self._build_channels(X.shape[2], X.shape[1])
 
         X_n: NDArray = X[np.logical_not(y)]
+        X_n = X_n[: int(X_n.shape[0] * self.tran_set_keep)]
+
         Nu_n = self.channel_responses(X_n)
 
         U = self.channels.reshape((self.channels.shape[0], -1))
