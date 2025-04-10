@@ -12,6 +12,7 @@ dependencies = [
     "torchvision>=0.21.0",
     "gecatsim>=1.4.4",
     "pillow>=11.0.0",
+    "prettytable>=3.16.0",
 ]
 
 [[tool.uv.index]]

@@ -3,6 +3,7 @@
 
 dataset
 !dataset/.gitkeep
+!dataset/report.md
 
 cfg/Phantom_Descriptor.json
 cfg/Phantom_NS_Descriptor.json
