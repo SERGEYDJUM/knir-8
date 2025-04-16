@@ -105,6 +105,8 @@ class CHO:
         X_n: NDArray = X[np.logical_not(y)]
         X_n = X_n[: int(X_n.shape[0] * self.tran_set_keep)]
 
+        assert X_n.shape[0] == X_p.shape[0]
+
         U = self.channels.reshape((self.channels.shape[0], -1))
 
         Nu_p = self.channel_responses(X_p)

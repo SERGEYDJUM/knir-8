@@ -13,6 +13,7 @@ dependencies = [
     "gecatsim>=1.4.4",
     "pillow>=11.0.0",
     "prettytable>=3.16.0",
+    "onnx>=1.17.0",
 ]
 
 [[tool.uv.index]]

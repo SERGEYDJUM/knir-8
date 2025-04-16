@@ -1,6 +1,8 @@
 from torch.optim.lr_scheduler import StepLR
 from torch.optim import Adadelta
 from sklearn.metrics import roc_auc_score
+from PIL import Image
+from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 import argparse
@@ -13,53 +15,53 @@ _precision_record = 0
 
 
 class CNNMO(nn.Module):
-    def __init__(self):
+    def __init__(
+        self,
+        input_size: int = 64,
+        resblock_chs: int = 32,
+        conv_1_chs: int = 16,
+        conv_2_chs: int = 16,
+        lin_2_neurons: int = 64,
+    ) -> None:
         super(CNNMO, self).__init__()
-
-        input_size = 64
-
-        res_c = 32
-        conv_mid_c = 16
-        conv_out_c = 16
-        lin_mid_neurons = 64
-
-        lin_in_neurons = conv_out_c * (((input_size - 4) // 2) ** 2)
 
         # ResNet Block
         self.res_conv_1 = nn.Conv2d(
-            1, res_c, 3, padding=1, padding_mode="replicate", bias=False
+            1, resblock_chs, 3, bias=False, padding=1, padding_mode="replicate"
         )
-        self.res_bn = nn.BatchNorm2d(res_c)
-        self.res_conv_2 = nn.Conv2d(res_c, 1, 1, bias=False)
+        self.res_bn = nn.BatchNorm2d(resblock_chs)
+        self.res_conv_2 = nn.Conv2d(resblock_chs, 1, 1, bias=True)
 
         # Convolutional Block
-        self.conv_1 = nn.Conv2d(1, conv_mid_c, 3)
-        self.conv_2 = nn.Conv2d(conv_mid_c, conv_out_c, 3)
+        self.conv_1 = nn.Conv2d(1, conv_1_chs, 3)
+        self.conv_2 = nn.Conv2d(conv_1_chs, conv_2_chs, 3)
 
         # Perceptron
         self.dropout_1 = nn.Dropout(0.25)
-        self.lin_1 = nn.Linear(lin_in_neurons, lin_mid_neurons)
+        self.lin_1 = nn.Linear(
+            conv_2_chs * (((input_size - 4) // 2) ** 2), lin_2_neurons
+        )
         self.dropout_2 = nn.Dropout(0.5)
-        self.lin_2 = nn.Linear(lin_mid_neurons, 1)
+        self.lin_2 = nn.Linear(lin_2_neurons, 1)
 
-    def res_forward(self, x):
+    def res_forward(self, x: Tensor) -> Tensor:
         r = self.res_conv_1(x)
         r = F.elu(self.res_bn(r))
         r = self.res_conv_2(r)
-        return F.elu(r + x.reshape_as(r))
+        return F.elu(x + r)
 
-    def convs_forward(self, x):
+    def convs_forward(self, x: Tensor) -> Tensor:
         x = F.relu(self.conv_1(x))
         x = F.relu(self.conv_2(x))
         x = F.max_pool2d(x, 2)
         return torch.flatten(x, 1)
 
-    def perceptron_forward(self, x):
+    def perceptron_forward(self, x: Tensor) -> Tensor:
         x = F.relu(self.lin_1(self.dropout_1(x)))
         x = self.lin_2(self.dropout_2(x))
         return x
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         x = self.res_forward(x)
         x = self.convs_forward(x)
         x = self.perceptron_forward(x)
@@ -218,3 +220,29 @@ def main():
 
     if args.save_model:
         torch.save(model.state_dict(), "checkpoints/cnn_mo.pt")
+
+    # def save_img(tensor: torch.Tensor, path: str):
+    #     t = tensor.clone()
+    #     t -= t.min()
+    #     t *= 255 / t.max()
+    #     Image.fromarray(t[0, 0, :, :].to(dtype=torch.uint8, device="cpu").numpy()).save(
+    #         path
+    #     )
+
+    # testimg = test_loader.dataset[0][0][torch.newaxis, :, :, :].cpu()
+    # save_img(testimg, ".temp/test_input.png")
+
+    # resres = model.res_forward(testimg.to("cuda")).cpu()
+    # save_img(resres, ".temp/test_resres.png")
+
+    # save_img(resres - testimg, ".temp/test_diff.png")
+
+    # torch.onnx.export(
+    #     model,
+    #     test_loader.dataset[0][0][torch.newaxis, :, :, :].to(device="cuda"),
+    #     ".temp/model.onnx",
+    #     input_names=["input"],
+    #     output_names=["output"],
+    #     opset_version=20,
+    #     dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+    # )
