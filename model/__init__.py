@@ -1,3 +1,3 @@
-from .model import CNNMO
+from .model import CNNMO, RNMO
 
-__all__ = ["CNNMO"]
+__all__ = ["CNNMO", "RNMO"]

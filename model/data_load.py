@@ -1,10 +1,4 @@
 from os import path
-from torchvision.transforms.v2 import (
-    Compose,
-    RandomCrop,
-    RandomHorizontalFlip,
-    RandomVerticalFlip,
-)
 from torch.utils.data import Dataset
 import pandas as pd
 import torch
@@ -19,20 +13,11 @@ class MyDataset(Dataset):
         img_r: int = 32,
         train: bool = True,
         train_split: float = 0.9,
-        augments: int = 8,
         value_scale: float = 0.001,
         extra_roi_mult: float = 1.1,
         random_state: int = 1,
         allowed_kernel: str = "standard",
     ) -> None:
-        self.transforms = Compose(
-            [
-                # RandomCrop(img_r * 2),
-                RandomHorizontalFlip(),
-                RandomVerticalFlip(),
-            ]
-        )
-
         df, _ = load_dataset()
         df = df[df["human_score"] != -1]
         df = df[df["recon_kernel"] == allowed_kernel]
@@ -58,8 +43,9 @@ class MyDataset(Dataset):
         else:
             df = pd.concat([df_p[-N:], df_n[-N:]], ignore_index=True)
 
+        augments = 8
         N *= 2 * augments
-        sroi_r = int(img_r * extra_roi_mult)
+        # sroi_r = int(img_r * extra_roi_mult)
 
         self.X = torch.zeros((N, 1, img_r * 2, img_r * 2), dtype=torch.float32)
         self.y = torch.zeros((N, 1), dtype=torch.float32)
@@ -70,18 +56,25 @@ class MyDataset(Dataset):
             center = row.bbox_center_x, row.bbox_center_y
 
             for j in range(augments):
-                cropped = self.transforms(
-                    torch.from_numpy(
-                        raw_img_cache[raw_name][row.slice_index][
-                            # center[1] - sroi_r : center[1] + sroi_r,
-                            center[1] - img_r : center[1] + img_r,
-                            # center[0] - sroi_r : center[0] + sroi_r,
-                            center[0] - img_r : center[0] + img_r,
-                        ]
-                    )
+                img = torch.from_numpy(
+                    raw_img_cache[raw_name][row.slice_index][
+                        # center[1] - sroi_r : center[1] + sroi_r,
+                        center[1] - img_r : center[1] + img_r,
+                        # center[0] - sroi_r : center[0] + sroi_r,
+                        center[0] - img_r : center[0] + img_r,
+                    ]
                 )
 
-                self.X[i * augments + j, 0] = cropped * value_scale
+                if j % 2 == 1:
+                    img = torch.fliplr(img)
+
+                if j in [2, 3, 6, 7]:
+                    img = torch.flipud(img)
+
+                if j > 3:
+                    img = torch.rot90(img)
+
+                self.X[i * augments + j, 0] = img * value_scale
                 self.y[i * augments + j, 0] = row.human_score
                 self.gt[i * augments + j, 0] = 1.0 if row.signal_present else 0.0
 

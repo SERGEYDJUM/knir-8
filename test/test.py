@@ -1,6 +1,6 @@
 from labeling.labeling import rawread, load_dataset, DATASET_RAWS
 from cho import CHO, CHOss, CHOArray
-from model import CNNMO
+from model import CNNMO, RNMO
 
 from sklearn.metrics import roc_auc_score
 from prettytable import PrettyTable, TableStyle
@@ -18,6 +18,7 @@ ROI_R: int = 32
 PIXEL_MUL = 0.001
 
 CNNMO_CP_PATH: str = "checkpoints/cnn_mo.pt"
+RNMO_CP_PATH: str = "checkpoints/rn_mo.pt"
 
 CHO_NOISE_MUL = 4
 CHO_T_NOISE_STD = 1
@@ -27,10 +28,12 @@ CHOSS_NOISE_MUL = 1.35
 CHOSS_T_NOISE_STD = 1
 CHOSS_TRAIN_SET_PART = 1
 
-CHOSS_ENABLED = False
+CHOSS_ENABLED = True
 CHO_RESTRICTED = False
 
-MAIN_MODEL_NAME = "CNN-MO"
+RNMO_ENABLED = False
+
+MAIN_MODEL_NAME = "RN-MO" if RNMO_ENABLED else "CNN-MO"
 ALT_MODEL_NAME = "CHOss" if CHOSS_ENABLED else "CHO"
 ALT_MODEL_NAME_EXT = "13xCHOss" if CHOSS_ENABLED else "13xCHO"
 ALT_MODEL_NAME_EXT += " (restricted)" if CHO_RESTRICTED else ""
@@ -92,9 +95,9 @@ class DataStore:
 
 
 def load_main_model() -> CNNMO:
-    checkpoint = torch.load(CNNMO_CP_PATH)
+    checkpoint = torch.load(RNMO_CP_PATH if RNMO_ENABLED else CNNMO_CP_PATH)
 
-    model = CNNMO()
+    model = RNMO() if RNMO_ENABLED else CNNMO()
     model.load_state_dict(checkpoint)
     model.eval()
 
@@ -105,7 +108,7 @@ def measure_dist(
     model: CHO | CHOss | CHOArray,
     X: NDArray,
     y: NDArray,
-    n: int = 256,  # 512
+    n: int = 512,  # 512
     places: NDArray = None,
 ) -> tuple[float, float]:
     measurements = np.zeros(n, dtype=np.double)

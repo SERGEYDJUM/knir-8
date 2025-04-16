@@ -18,37 +18,35 @@ class CNNMO(nn.Module):
     def __init__(
         self,
         input_size: int = 64,
-        resblock_chs: int = 32,
         conv_1_chs: int = 16,
         conv_2_chs: int = 16,
+        res_chs: int = 32,
         lin_2_neurons: int = 64,
     ) -> None:
         super(CNNMO, self).__init__()
 
         # ResNet Block
         self.res_conv_1 = nn.Conv2d(
-            1, resblock_chs, 3, bias=False, padding=1, padding_mode="replicate"
+            1, res_chs, 3, bias=False, padding=1, padding_mode="replicate"
         )
-        self.res_bn = nn.BatchNorm2d(resblock_chs)
-        self.res_conv_2 = nn.Conv2d(resblock_chs, 1, 1, bias=True)
+        self.res_bn = nn.BatchNorm2d(res_chs)
+        self.res_conv_2 = nn.Conv2d(res_chs, 1, 1, bias=False)
 
         # Convolutional Block
         self.conv_1 = nn.Conv2d(1, conv_1_chs, 3)
         self.conv_2 = nn.Conv2d(conv_1_chs, conv_2_chs, 3)
 
         # Perceptron
-        self.dropout_1 = nn.Dropout(0.25)
-        self.lin_1 = nn.Linear(
-            conv_2_chs * (((input_size - 4) // 2) ** 2), lin_2_neurons
-        )
+        self.dropout_1 = nn.Dropout(0.1)
+        self.lin_1 = nn.Linear(conv_2_chs * ((input_size // 2 - 2) ** 2), lin_2_neurons)
         self.dropout_2 = nn.Dropout(0.5)
         self.lin_2 = nn.Linear(lin_2_neurons, 1)
 
-    def res_forward(self, x: Tensor) -> Tensor:
+    def res_block_forward(self, x: Tensor) -> Tensor:
         r = self.res_conv_1(x)
         r = F.elu(self.res_bn(r))
         r = self.res_conv_2(r)
-        return F.elu(x + r)
+        return F.elu(r + x)
 
     def convs_forward(self, x: Tensor) -> Tensor:
         x = F.relu(self.conv_1(x))
@@ -62,8 +60,70 @@ class CNNMO(nn.Module):
         return x
 
     def forward(self, x: Tensor) -> Tensor:
-        x = self.res_forward(x)
+        x = self.res_block_forward(x)
         x = self.convs_forward(x)
+        x = self.perceptron_forward(x)
+        return x
+
+
+class RNMO(nn.Module):
+    def __init__(
+        self,
+        input_size: int = 64,
+        res_blocks: int = 5,
+        lin_2_neurons: int = 64,
+    ) -> None:
+        super(RNMO, self).__init__()
+
+        # ResNet Blocks
+        self.blocks = nn.ModuleList(
+            [
+                nn.ModuleList(
+                    [
+                        nn.Conv2d(
+                            max(2 * bidx, 1),
+                            2 * (bidx + 1),
+                            3,
+                            bias=False,
+                            padding=1,
+                            padding_mode="replicate",
+                        ),
+                        nn.BatchNorm2d(2 * (bidx + 1)),
+                        nn.Conv2d(
+                            2 * (bidx + 1),
+                            2 * (bidx + 1),
+                            3,
+                            bias=False,
+                            padding=1,
+                            padding_mode="replicate",
+                        ),
+                    ],
+                )
+                for bidx in range(res_blocks)
+            ]
+        )
+
+        # Perceptron
+        self.dropout_1 = nn.Dropout(0.25)
+        self.lin_1 = nn.Linear(input_size * input_size, lin_2_neurons)
+        self.dropout_2 = nn.Dropout(0.5)
+        self.lin_2 = nn.Linear(lin_2_neurons, 1)
+
+    def res_block_forward(self, bidx: int, x: Tensor) -> Tensor:
+        r = self.blocks[bidx][0](x)
+        r = F.elu(self.blocks[bidx][1](r))
+        r = self.blocks[bidx][2](r)
+        return F.elu(r + x)
+
+    def perceptron_forward(self, x: Tensor) -> Tensor:
+        x = F.relu(self.lin_1(self.dropout_1(x)))
+        x = self.lin_2(self.dropout_2(x))
+        return x
+
+    def forward(self, x: Tensor) -> Tensor:
+        for bidx in range(len(self.blocks)):
+            x = self.res_block_forward(bidx, x)
+        x = x.flatten(1)
         x = self.perceptron_forward(x)
         return x
 
@@ -118,6 +178,12 @@ def test(model, device, test_loader):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="PyTorch Model Training")
+    parser.add_argument(
+        "--rn",
+        action="store_true",
+        default=False,
+        help="train a ResNet",
+    )
     parser.add_argument(
         "--batch-size",
         type=int,
@@ -202,7 +268,7 @@ def main():
         shuffle=True,
     )
 
-    model = CNNMO().to(device)
+    model = (RNMO() if args.rn else CNNMO()).to(device)
     optimizer = Adadelta(model.parameters(), lr=args.lr)
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
 
@@ -219,7 +285,9 @@ def main():
     print(f"Best classifier test AUC: {_precision_record:.3f}")
 
     if args.save_model:
-        torch.save(model.state_dict(), "checkpoints/cnn_mo.pt")
+        torch.save(
+            model.state_dict(), f"checkpoints/{'rn' if args.rn else 'cnn'}_mo.pt"
+        )
 
     # def save_img(tensor: torch.Tensor, path: str):
     #     t = tensor.clone()
@@ -237,12 +305,13 @@ def main():
 
     # save_img(resres - testimg, ".temp/test_diff.png")
 
-    # torch.onnx.export(
-    #     model,
-    #     test_loader.dataset[0][0][torch.newaxis, :, :, :].to(device="cuda"),
-    #     ".temp/model.onnx",
-    #     input_names=["input"],
-    #     output_names=["output"],
-    #     opset_version=20,
-    #     dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
-    # )
+    if args.save_model:
+        torch.onnx.export(
+            model,
+            test_loader.dataset[0][0][torch.newaxis, :, :, :].to(device="cuda"),
+            ".temp/model.onnx",
+            input_names=["input"],
+            output_names=["output"],
+            opset_version=20,
+            dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+        )
