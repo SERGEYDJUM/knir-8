@@ -4,10 +4,11 @@ from model import CNNMO, RNMO
 
 from sklearn.metrics import roc_auc_score
 from prettytable import PrettyTable, TableStyle
-from scipy.stats import spearmanr, pearsonr
+from scipy.stats import pearsonr
 from numpy.typing import NDArray
 
 from os import path
+from sys import argv
 from dataclasses import dataclass
 from pandas import read_csv, DataFrame
 
@@ -24,16 +25,16 @@ CNNMO_CP_PATH: str = "checkpoints/cnn_mo.pt"
 RNMO_CP_PATH: str = "checkpoints/rn_mo.pt"
 OUTPUT_PATH: str = "dataset/metrics.csv"
 
-CHO_NOISE_MUL = 3
+CHO_NOISE_MUL = 1.4
 CHO_T_NOISE_STD = 0
 CHO_TRAIN_SET_PART = 1
 
-CHOSS_NOISE_MUL = 1.34
-CHOSS_T_NOISE_STD = 0
+CHOSS_NOISE_MUL = 0.85
+CHOSS_T_NOISE_STD = 0.5
 CHOSS_TRAIN_SET_PART = 1
 
-CHOSS_ENABLED = True
-CHO_RESTRICTED = False
+CHOSS_ENABLED = "choss" in argv
+CHO_RESTRICTED = "restrict" in argv
 
 RNMO_ENABLED = False
 
@@ -138,10 +139,7 @@ def calc_corrs(
 ) -> tuple[tuple, tuple]:
     main_sc_p = pearsonr(human_aucs, main_aucs).statistic
     alt_sc_p = pearsonr(human_aucs, alt_aucs).statistic
-    main_sc_s = spearmanr(human_aucs, main_aucs).statistic
-    alt_sc_s = spearmanr(human_aucs, alt_aucs).statistic
-
-    return (main_sc_p, alt_sc_p), (main_sc_s, alt_sc_s)
+    return main_sc_p, alt_sc_p
 
 
 def adequacy_score(aucs: list[float], ref: list[float]) -> tuple[float]:
@@ -150,7 +148,7 @@ def adequacy_score(aucs: list[float], ref: list[float]) -> tuple[float]:
     # mse = sum(map(lambda t: (t[0] - t[1]) ** 2, zip(aucs, ref))) / len(ref)
     pear_r = pearsonr(aucs, ref).statistic
     deltamu = abs(sum(aucs) / n - sum(ref) / n)
-    return ((pear_r + 1) / 2) * (1 - deltamu), deltamu
+    return pear_r, deltamu
 
 
 def round_list(l: list[float]) -> list[str]:
@@ -192,8 +190,6 @@ def print_auc_table(
 def print_res_table(
     main_p: float,
     alt_p: float,
-    main_s: float,
-    alt_s: float,
     main_mse: float,
     alt_mse: float,
     main_adequacy: float,
@@ -201,19 +197,17 @@ def print_res_table(
 ) -> None:
     table = PrettyTable()
     table.set_style(TableStyle.MARKDOWN)
-    table.field_names = ["", "Spearman's ρ", "Pearson's ρ", "Δμ", "Adequacy"]
+    table.field_names = ["", "Pearson's ρ", "Δμ", "Adequacy"]
     table.add_rows(
         [
             [
                 MAIN_MODEL_NAME,
-                f"{main_s:.3f}",
                 f"{main_p:.3f}",
                 f"{main_mse:.3f}",
                 f"__{main_adequacy:.3f}__",
             ],
             [
                 ALT_MODEL_NAME,
-                f"{alt_s:.3f}",
                 f"{alt_p:.3f}",
                 f"{alt_mse:.3f}",
                 f"__{alt_adequacy:.3f}__",
@@ -295,7 +289,6 @@ def main():
     ex = ExperimentExecutor()
 
     print(f"# {MAIN_MODEL_NAME} vs {ALT_MODEL_NAME_FULL}")
-    print("\n## Train set AUCs\n")
 
     # Configuration #1
     ex.perform(
@@ -325,19 +318,14 @@ def main():
         tube_current=40,
     )
 
+    print("\n## Train set AUCs\n")
     res = ex.results
-
-    (main_p, alt_p), (main_s, alt_s) = calc_corrs(
-        res.human_aucs, res.main_aucs, res.alt_aucs
-    )
+    main_p, alt_p = calc_corrs(res.human_aucs, res.main_aucs, res.alt_aucs)
     ade_main, main_mse = adequacy_score(res.main_aucs, res.human_aucs)
     ade_alt, alt_mse = adequacy_score(res.alt_aucs, res.human_aucs)
-
     print_auc_table(res.human_aucs, res.main_aucs, res.alt_aucs, res.alt_auc_stds)
     print("\n### Metrics\n")
-    print_res_table(main_p, alt_p, main_s, alt_s, main_mse, alt_mse, ade_main, ade_alt)
-
-    print("\n## Test set AUCs\n")
+    print_res_table(main_p, alt_p, main_mse, alt_mse, ade_main, ade_alt)
 
     # Configuration #5
     ex.perform(
@@ -367,8 +355,8 @@ def main():
         tube_current=40,
     )
 
+    print("\n## Test set AUCs\n")
     res = ex.results
-
     print_auc_table(
         res.human_aucs[4:],
         res.main_aucs[4:],
@@ -376,25 +364,17 @@ def main():
         res.alt_auc_stds[4:],
         index_start=5,
     )
-
-    (main_p, alt_p), (main_s, alt_s) = calc_corrs(
-        res.human_aucs[4:], res.main_aucs[4:], res.alt_aucs[4:]
-    )
+    main_p, alt_p = calc_corrs(res.human_aucs[4:], res.main_aucs[4:], res.alt_aucs[4:])
     ade_main, main_mse = adequacy_score(res.main_aucs[4:], res.human_aucs[4:])
     ade_alt, alt_mse = adequacy_score(res.alt_aucs[4:], res.human_aucs[4:])
-
     print("\n### Metrics\n")
-    print_res_table(main_p, alt_p, main_s, alt_s, main_mse, alt_mse, ade_main, ade_alt)
+    print_res_table(main_p, alt_p, main_mse, alt_mse, ade_main, ade_alt)
 
     print("\n## Dataset metrics\n")
-
-    (main_p, alt_p), (main_s, alt_s) = calc_corrs(
-        res.human_aucs, res.main_aucs, res.alt_aucs
-    )
+    main_p, alt_p = calc_corrs(res.human_aucs, res.main_aucs, res.alt_aucs)
     ade_main, main_mse = adequacy_score(res.main_aucs, res.human_aucs)
     ade_alt, alt_mse = adequacy_score(res.alt_aucs, res.human_aucs)
-
-    print_res_table(main_p, alt_p, main_s, alt_s, main_mse, alt_mse, ade_main, ade_alt)
+    print_res_table(main_p, alt_p, main_mse, alt_mse, ade_main, ade_alt)
 
     df = DataFrame()
     if path.exists(OUTPUT_PATH):

@@ -16,8 +16,8 @@ def _gabor_filter(x: int, y: int, f: float, w: float, theta: float) -> float:
 
 
 def _h_scatter_matrix(X: NDArray, X_k_mean: NDArray) -> NDArray:
-    X = X.astype(np.float64).T - X_k_mean[:, None]
-    c = np.dot(X, X.T.conj()) * np.true_divide(1, X.shape[1] - 1)
+    x = X.astype(np.float64).T - X_k_mean[:, None]
+    c = np.dot(x, x.T.conj()) * np.true_divide(1, x.shape[1] - 1)
     return c.squeeze()
 
 
