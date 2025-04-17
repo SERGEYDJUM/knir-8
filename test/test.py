@@ -9,6 +9,7 @@ from numpy.typing import NDArray
 
 from os import path
 from dataclasses import dataclass
+from pandas import read_csv, DataFrame
 
 import numpy as np
 import torch
@@ -17,15 +18,18 @@ import torch
 ROI_R: int = 32
 PIXEL_MUL = 0.001
 
+MEASURE_DIST_REPEAT = 256
+
 CNNMO_CP_PATH: str = "checkpoints/cnn_mo.pt"
 RNMO_CP_PATH: str = "checkpoints/rn_mo.pt"
+OUTPUT_PATH: str = "dataset/metrics.csv"
 
-CHO_NOISE_MUL = 4
-CHO_T_NOISE_STD = 1
+CHO_NOISE_MUL = 3
+CHO_T_NOISE_STD = 0
 CHO_TRAIN_SET_PART = 1
 
-CHOSS_NOISE_MUL = 1.35
-CHOSS_T_NOISE_STD = 1
+CHOSS_NOISE_MUL = 1.34
+CHOSS_T_NOISE_STD = 0
 CHOSS_TRAIN_SET_PART = 1
 
 CHOSS_ENABLED = True
@@ -35,8 +39,9 @@ RNMO_ENABLED = False
 
 MAIN_MODEL_NAME = "RN-MO" if RNMO_ENABLED else "CNN-MO"
 ALT_MODEL_NAME = "CHOss" if CHOSS_ENABLED else "CHO"
-ALT_MODEL_NAME_EXT = "13xCHOss" if CHOSS_ENABLED else "13xCHO"
-ALT_MODEL_NAME_EXT += " (restricted)" if CHO_RESTRICTED else ""
+ALT_MODEL_NAME_EXT = ALT_MODEL_NAME + ("(r)" if CHO_RESTRICTED else "")
+ALT_MODEL_NAME_FULL = "13xCHOss" if CHOSS_ENABLED else "13xCHO"
+ALT_MODEL_NAME_FULL += " (restricted)" if CHO_RESTRICTED else ""
 
 
 @dataclass
@@ -108,7 +113,7 @@ def measure_dist(
     model: CHO | CHOss | CHOArray,
     X: NDArray,
     y: NDArray,
-    n: int = 512,  # 512
+    n: int = MEASURE_DIST_REPEAT,
     places: NDArray = None,
 ) -> tuple[float, float]:
     measurements = np.zeros(n, dtype=np.double)
@@ -289,7 +294,7 @@ class ExperimentExecutor:
 def main():
     ex = ExperimentExecutor()
 
-    print(f"# {MAIN_MODEL_NAME} vs {ALT_MODEL_NAME_EXT}")
+    print(f"# {MAIN_MODEL_NAME} vs {ALT_MODEL_NAME_FULL}")
     print("\n## Train set AUCs\n")
 
     # Configuration #1
@@ -390,3 +395,13 @@ def main():
     ade_alt, alt_mse = adequacy_score(res.alt_aucs, res.human_aucs)
 
     print_res_table(main_p, alt_p, main_s, alt_s, main_mse, alt_mse, ade_main, ade_alt)
+
+    df = DataFrame()
+    if path.exists(OUTPUT_PATH):
+        df = read_csv(OUTPUT_PATH)
+    df["CFG"] = list(range(len(res.human_aucs)))
+    df["Human"] = res.human_aucs
+    df[MAIN_MODEL_NAME] = res.main_aucs
+    df[ALT_MODEL_NAME_EXT] = res.alt_aucs
+    df[ALT_MODEL_NAME_EXT + "_std"] = res.alt_auc_stds
+    df.to_csv(OUTPUT_PATH, index=False)

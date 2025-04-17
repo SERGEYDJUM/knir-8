@@ -15,6 +15,12 @@ def _gabor_filter(x: int, y: int, f: float, w: float, theta: float) -> float:
     return np.exp(exp_component) * np.cos(cos_component)
 
 
+def _h_scatter_matrix(X: NDArray, X_k_mean: NDArray) -> NDArray:
+    X = X.astype(np.float64).T - X_k_mean[:, None]
+    c = np.dot(X, X.T.conj()) * np.true_divide(1, X.shape[1] - 1)
+    return c.squeeze()
+
+
 @dataclass
 class CHOChannelConfig:
     bands: tuple[tuple[float, float]] = (
@@ -110,10 +116,12 @@ class CHO:
         U = self.channels.reshape((self.channels.shape[0], -1))
 
         Nu_p = self.channel_responses(X_p)
-        K_nu_p = U @ (np.cov(X_p.reshape((X_p.shape[0], -1)), rowvar=False) @ U.T)
+        X_p_mean = X_p.reshape((X_p.shape[0], -1)).mean(axis=0)
+        K_nu_p = U @ (_h_scatter_matrix(X.reshape((X.shape[0], -1)), X_p_mean) @ U.T)
 
         Nu_n = self.channel_responses(X_n)
-        K_nu_n = U @ (np.cov(X_n.reshape((X_n.shape[0], -1)), rowvar=False) @ U.T)
+        X_n_mean = X_n.reshape((X_n.shape[0], -1)).mean(axis=0)
+        K_nu_n = U @ (_h_scatter_matrix(X.reshape((X.shape[0], -1)), X_n_mean) @ U.T)
 
         K_nu = (K_nu_n + K_nu_p) / 2
         mean_nu = np.mean(Nu_p, axis=0) - np.mean(Nu_n, axis=0)

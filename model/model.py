@@ -255,26 +255,28 @@ def main():
     torch.manual_seed(args.seed)
 
     train_loader = torch.utils.data.DataLoader(
-        MyDataset(train=True, random_state=args.seed, train_split=1),
+        MyDataset(train=True, random_state=args.seed, train_split=0.9),
         batch_size=args.batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
     )
 
     test_loader = torch.utils.data.DataLoader(
-        MyDataset(train=False, random_state=args.seed, train_split=0),
+        MyDataset(train=False, random_state=args.seed, train_split=0.9),
         batch_size=args.test_batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
     )
 
     model = (RNMO() if args.rn else CNNMO()).to(device)
+    print("Model weight count:", sum(p.numel() for p in model.parameters()))
+
     optimizer = Adadelta(model.parameters(), lr=args.lr)
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
 
     for epoch in range(args.epochs):
         train(model, device, train_loader, optimizer, epoch)
-        test(model, device, test_loader)
+        # test(model, device, test_loader)
         scheduler.step()
 
         print(f"\tLatest learning rate: {scheduler.get_last_lr()[0]:.4f}\n")
