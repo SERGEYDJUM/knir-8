@@ -54,8 +54,9 @@ axes.errorbar(
 
 axes.set_ylabel("ΔAUC")
 axes.set_ylim(-0.4, 0.4)
-# axes.set_xticks(range(1, 9), labels=dfdiff["CFG"])
+axes.set_xticks(range(1, 11), labels=dfdiff["CFG"])
 axes.axvline(4.5, c="black", linestyle="-.")
+axes.axvline(8.5, c="grey", linestyle="-.")
 axes.legend(loc=1)
 axes.get_figure().savefig("dataset/fig1.png")
 

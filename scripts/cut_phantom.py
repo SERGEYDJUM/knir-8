@@ -1,3 +1,4 @@
+from argparse import ArgumentParser, Namespace
 import gecatsim as gcs
 from PIL import Image
 import json
@@ -5,14 +6,17 @@ from os import path
 import numpy as np
 
 SRC_PATH = ".temp/uncut"
-S_H, S_W = 1050, 1700
-
-
 OUT_PATH = "./cfg/layers"
+
+S_H, S_W = 1050, 1700
 RSLICES = 4
 FOV = 1280, 920
 FOV_R = FOV[0] // 2, FOV[1] // 2
 FOV_S = 0, 50
+
+parser = ArgumentParser()
+parser.add_argument("--z-offset", default=0.5, type=float)
+args = parser.parse_args()
 
 desc = json.load(open(path.join(SRC_PATH, "adult_male_50percentile_chest.json")))
 
@@ -39,9 +43,13 @@ for idx in range(len(desc["volumefractionmap_filename"])):
 
     material = np.zeros((RSLICES * 2, S_H, S_W), dtype=np.int8)
 
+    center_slice = int(args.z_offset * slices)
+
+    assert center_slice - RSLICES >= 0 and center_slice + RSLICES < slices
+
     material[
         :, mountpoint[1] : mountpoint[1] + h, mountpoint[0] : mountpoint[0] + w
-    ] = raw[slices // 2 - RSLICES : slices // 2 + RSLICES, :, :]
+    ] = raw[center_slice - RSLICES : center_slice + RSLICES, :, :]
 
     del raw
 
@@ -50,6 +58,8 @@ for idx in range(len(desc["volumefractionmap_filename"])):
         isocenter[1] - FOV_R[1] + FOV_S[1] : isocenter[1] + FOV_R[1] + FOV_S[1],
         isocenter[0] - FOV_R[0] + FOV_S[0] : isocenter[0] + FOV_R[0] + FOV_S[0],
     ]
+
+    print(f"Min: {material.min()}, Max: {material.max()}")
 
     layer = np.zeros((FOV[1], FOV[0], 4), dtype=np.uint8)
     layer[:, :, 0] = 255 * ((idx + 1) % 2)

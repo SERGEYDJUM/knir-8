@@ -26,7 +26,7 @@ RNMO_CP_PATH: str = "checkpoints/rn_mo.pt"
 OUTPUT_PATH: str = "dataset/metrics.csv"
 
 CHO_NOISE_MUL = 1.4
-CHO_T_NOISE_STD = 0
+CHO_T_NOISE_STD = 0.4
 CHO_TRAIN_SET_PART = 1
 
 CHOSS_NOISE_MUL = 0.85
@@ -74,6 +74,7 @@ class DataStore:
         a = np.zeros(df.shape[0], dtype=np.uint8)
         hy = np.zeros(df.shape[0], dtype=np.int8)
         o = np.zeros(df.shape[0], dtype=np.bool)
+        l = np.zeros(df.shape[0], dtype=np.bool)
         s = np.zeros(df.shape[0], dtype=np.uint8)
 
         for i, row in enumerate(df.itertuples()):
@@ -88,8 +89,15 @@ class DataStore:
             hy[i] = row.human_score
             k[i] = row.recon_kernel == "soft"
             a[i] = row.tube_current
-            o[i] = row.phantom_cfg_md5 == "3d3fd108138ce807fecba23851bbf61b"
+            o[i] = row.phantom_cfg_md5 in [
+                "3d3fd108138ce807fecba23851bbf61b",
+                "dca819d68a465d5977515ae96d3dbb84",
+            ]
             s[i] = row.bbox_index
+            l[i] = row.xcist_cfg_md5 in [
+                "cd7e0f84b35facac6a17c69a697754d2",
+                "94de7be616c1e06a7456341593426681",
+            ]
 
             center = row.bbox_center_x, row.bbox_center_y
             X[i] = raws[raw_name][row.slice_index][
@@ -97,7 +105,16 @@ class DataStore:
                 center[0] - ROI_R : center[0] + ROI_R,
             ]
 
-        self.x, self.y, self.hy, self.a, self.k, self.o, self.s = X, y, hy, a, k, o, s
+        self.x, self.y, self.hy, self.a, self.k, self.o, self.s, self.l = (
+            X,
+            y,
+            hy,
+            a,
+            k,
+            o,
+            s,
+            l,
+        )
 
 
 def load_main_model() -> CNNMO:
@@ -230,13 +247,20 @@ class ExperimentExecutor:
         self.kernel_standard = np.logical_not(self.kernel_soft)
         self.big_objects = np.logical_not(self.small_objects)
         self.scored = self.data.hy != -1
+        self.shifted = self.data.l
+        self.not_shifted = np.logical_not(self.shifted)
 
     def perform(
-        self, is_small_objects: bool, is_kernel_soft: bool, tube_current: int
+        self,
+        is_small_objects: bool,
+        is_kernel_soft: bool,
+        tube_current: int,
+        shifted: bool = False,
     ) -> None:
         current_f = self.data.a == tube_current
         object_size_f = self.small_objects if is_small_objects else self.big_objects
         kernel_f = self.kernel_soft if is_kernel_soft else self.kernel_standard
+        shifted_f = self.shifted if shifted else self.not_shifted
 
         alt_model = CHOArray(
             CHOss(
@@ -254,7 +278,7 @@ class ExperimentExecutor:
 
         train_filter = np.logical_and(
             self.kernel_standard if CHO_RESTRICTED else kernel_f,
-            np.logical_and(current_f, object_size_f),
+            np.logical_and(current_f, np.logical_and(object_size_f, shifted_f)),
         )
 
         alt_model.train(
@@ -265,7 +289,7 @@ class ExperimentExecutor:
 
         ex_filter = np.logical_and(
             np.logical_and(kernel_f, self.scored),
-            np.logical_and(current_f, object_size_f),
+            np.logical_and(np.logical_and(current_f, object_size_f), shifted_f),
         )
 
         inp = self.data.x[ex_filter] * PIXEL_MUL
@@ -353,6 +377,22 @@ def main():
         is_small_objects=False,
         is_kernel_soft=True,
         tube_current=40,
+    )
+
+    # Configuration #9
+    ex.perform(
+        is_small_objects=True,
+        is_kernel_soft=False,
+        tube_current=40,
+        shifted=True,
+    )
+
+    # Configuration #10
+    ex.perform(
+        is_small_objects=False,
+        is_kernel_soft=False,
+        tube_current=10,
+        shifted=True,
     )
 
     print("\n## Test set AUCs\n")

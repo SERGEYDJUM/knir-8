@@ -2,6 +2,7 @@ import struct
 from tkinter import *
 from tkinter import ttk
 from os import path
+from sys import argv
 from pandas import DataFrame, read_csv
 from random import shuffle
 from PIL import Image, ImageTk, ImageOps
@@ -29,10 +30,20 @@ def rawread(path: str, shape: tuple) -> NDArray:
     return data
 
 
-def load_dataset() -> tuple[DataFrame, list[int]]:
+def load_dataset(raw_filter: list[str] = None) -> tuple[DataFrame, list[int]]:
     csvdf = read_csv(DATASET_CSV)
-    unscored_indexes = csvdf.index[csvdf["human_score"] == -1].tolist()
+    unscored_indexes = []
+
+    if raw_filter:
+        isin = csvdf["raw_source"].isin(raw_filter)
+        hs = csvdf["human_score"] == -1
+        unscored_indexes = csvdf.index[isin * hs].tolist()
+    else:
+        unscored_indexes = csvdf.index[csvdf["human_score"] == -1].tolist()
+
     shuffle(unscored_indexes)
+    shuffle(unscored_indexes)
+
     return csvdf, unscored_indexes
 
 
@@ -96,7 +107,7 @@ class App:
         self.window.title("CT Labeling")
         self.init_complete = False
 
-        self.csvdf, self.unscored_idxs = load_dataset()
+        self.csvdf, self.unscored_idxs = load_dataset(raw_filter=argv[1:])
         self.current_index = 0
 
         if not self.unscored_idxs:
