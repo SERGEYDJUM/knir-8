@@ -15,12 +15,6 @@ def _gabor_filter(x: int, y: int, f: float, w: float, theta: float) -> float:
     return np.exp(exp_component) * np.cos(cos_component)
 
 
-def _h_scatter_matrix(X: NDArray, X_k_mean: NDArray) -> NDArray:
-    x = X.astype(np.float64).T - X_k_mean[:, None]
-    c = np.dot(x, x.T.conj()) * np.true_divide(1, x.shape[1] - 1)
-    return c.squeeze()
-
-
 @dataclass
 class CHOChannelConfig:
     bands: tuple[tuple[float, float]] = (
@@ -88,6 +82,14 @@ class CHO:
 
         return channels
 
+    def _channelized_cov(self, X: NDArray) -> NDArray:
+        # Get image variation
+        x: NDArray = X - X.mean(axis=0)
+        # Channelize variations
+        x = np.sum(self.channels[None, :, :, :] * x[:, None, :, :], axis=(2, 3))
+        # Return covariance matrix
+        return (x.T @ x) / x.shape[0]
+
     def channel_responses(
         self,
         X: NDArray[np.float64],
@@ -111,23 +113,13 @@ class CHO:
         X_n: NDArray = X[np.logical_not(y)]
         X_n = X_n[: int(X_n.shape[0] * self.tran_set_keep)]
 
-        assert X_n.shape[0] == X_p.shape[0]
+        mean_diff = np.mean(X_p, axis=0) - np.mean(X_n, axis=0)
+        mean_diff_nu = self.channel_responses(mean_diff[np.newaxis, :, :])[0]
 
-        U = self.channels.reshape((self.channels.shape[0], -1))
+        self.Nu_n_std = np.std(self.channel_responses(X_n), axis=0)
 
-        Nu_p = self.channel_responses(X_p)
-        X_p_mean = X_p.reshape((X_p.shape[0], -1)).mean(axis=0)
-        K_nu_p = U @ (_h_scatter_matrix(X.reshape((X.shape[0], -1)), X_p_mean) @ U.T)
-
-        Nu_n = self.channel_responses(X_n)
-        X_n_mean = X_n.reshape((X_n.shape[0], -1)).mean(axis=0)
-        K_nu_n = U @ (_h_scatter_matrix(X.reshape((X.shape[0], -1)), X_n_mean) @ U.T)
-
-        K_nu = (K_nu_n + K_nu_p) / 2
-        mean_nu = np.mean(Nu_p, axis=0) - np.mean(Nu_n, axis=0)
-
-        self.Nu_n_std = np.std(Nu_n, axis=0)
-        self.template = np.linalg.inv(K_nu) @ mean_nu
+        K_nu = (self._channelized_cov(X_p) + self._channelized_cov(X_n)) / 2
+        self.template = np.linalg.inv(K_nu) @ mean_diff_nu
 
     def test(self, X: NDArray[np.float64]) -> NDArray[np.float64]:
         t = np.sum(
@@ -152,10 +144,7 @@ class CHOss(CHO):
         X_n = X_n[: int(X_n.shape[0] * self.tran_set_keep)]
 
         Nu_n = self.channel_responses(X_n)
-
-        U = self.channels.reshape((self.channels.shape[0], -1))
-        X_n = X_n.reshape((X_n.shape[0], X_n.shape[1] * X_n.shape[2]))
-        K_nu_n = U @ (np.cov(X_n, rowvar=False) @ U.T)
+        K_nu_n = self._channelized_cov(X_n)
 
         self.mean_nu_n = np.mean(Nu_n, axis=0)
         self.Nu_n_std = np.std(Nu_n, axis=0)
@@ -167,8 +156,23 @@ class CHOss(CHO):
         return t + np.random.normal(0, self.test_noise_std, t.shape)
 
 
+class NPWMF(CHO):
+    def train(self, X: NDArray[np.float64], y: NDArray[np.bool]) -> None:
+        X_n: NDArray = X[np.logical_not(y)]
+        X_n = X_n[: int(X_n.shape[0] * self.tran_set_keep)]
+
+        X_p: NDArray = X[y]
+        X_p = X_p[: int(X_p.shape[0] * self.tran_set_keep)]
+
+        self.x_meandiff = X_p.mean(axis=0) - X_n.mean(axis=0)
+
+    def test(self, X: NDArray[np.float64]) -> NDArray[np.float64]:
+        t = np.sum(X * self.x_meandiff[np.newaxis, :, :], axis=(1, 2))
+        return t + np.random.normal(0, self.test_noise_std, t.shape)
+
+
 class CHOArray:
-    def __init__(self, model: CHO | CHOss) -> None:
+    def __init__(self, model: CHO) -> None:
         self.model_base = model
         self.models: list[CHO] = []
 

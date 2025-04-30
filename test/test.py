@@ -1,5 +1,5 @@
 from labeling.labeling import rawread, load_dataset, DATASET_RAWS
-from cho import CHO, CHOss, CHOArray
+from cho import CHO, CHOss, CHOArray, NPWMF
 from model import CNNMO, RNMO
 
 from sklearn.metrics import roc_auc_score
@@ -19,36 +19,69 @@ import torch
 ROI_R: int = 32
 PIXEL_MUL = 0.001
 
-MEASURE_DIST_REPEAT = 256
+MEASURE_DIST_REPEAT = 64
+NN_MEASURE_DIST_REPEAT = 64
 
-CNNMO_CP_PATH: str = "checkpoints/cnn_mo.pt"
+CNNMO_CP_PATH: str = "checkpoints/cnn_mo_best.pt"
+CNMMO_NOISE_STD: float = 2.85
+
 RNMO_CP_PATH: str = "checkpoints/rn_mo.pt"
 OUTPUT_PATH: str = "dataset/metrics.csv"
 
-CHO_NOISE_MUL = 1.4
-CHO_T_NOISE_STD = 0.4
+NPWMF_T_NOISE_STD = 0
+NPWMF_TRAIN_SET_PART = 1
+
+CHO_NOISE_MUL = 0.3
+CHO_T_NOISE_STD = 1
 CHO_TRAIN_SET_PART = 1
 
 CHOSS_NOISE_MUL = 0.85
-CHOSS_T_NOISE_STD = 0.5
+CHOSS_T_NOISE_STD = 1
 CHOSS_TRAIN_SET_PART = 1
 
-CHOSS_ENABLED = "choss" in argv
-CHO_RESTRICTED = "restrict" in argv
+MO_RESTRICTED = "restrict" in argv
 
 RNMO_ENABLED = False
-
 MAIN_MODEL_NAME = "RN-MO" if RNMO_ENABLED else "CNN-MO"
-ALT_MODEL_NAME = "CHOss" if CHOSS_ENABLED else "CHO"
-ALT_MODEL_NAME_EXT = ALT_MODEL_NAME + ("(r)" if CHO_RESTRICTED else "")
-ALT_MODEL_NAME_FULL = "13xCHOss" if CHOSS_ENABLED else "13xCHO"
-ALT_MODEL_NAME_FULL += " (restricted)" if CHO_RESTRICTED else ""
+
+ALT_MODEL = None
+ALT_MODEL_NAME = None
+ALT_MODEL_NAME_EXT = None
+ALT_MODEL_NAME_FULL = None
+
+if "npwmf" in argv:
+    ALT_MODEL_NAME = "NPWMF"
+    ALT_MODEL = NPWMF(
+        test_stat_noise_std=NPWMF_T_NOISE_STD,
+        train_set_keep=NPWMF_TRAIN_SET_PART,
+    )
+elif "cho" in argv:
+    ALT_MODEL_NAME = "CHO"
+    ALT_MODEL = CHO(
+        channel_noise_std=CHO_NOISE_MUL,
+        test_stat_noise_std=CHO_T_NOISE_STD,
+        train_set_keep=CHO_TRAIN_SET_PART,
+    )
+else:
+    ALT_MODEL_NAME = "CHOss"
+    ALT_MODEL = CHOss(
+        channel_noise_std=CHOSS_NOISE_MUL,
+        test_stat_noise_std=CHOSS_T_NOISE_STD,
+        train_set_keep=CHOSS_TRAIN_SET_PART,
+    )
+
+
+ALT_MODEL_NAME_EXT = ALT_MODEL_NAME + ("(r)" if MO_RESTRICTED else "")
+ALT_MODEL_NAME_FULL = f"13x{ALT_MODEL_NAME}" + (
+    " (restricted)" if MO_RESTRICTED else ""
+)
 
 
 @dataclass
 class Results:
     human_aucs: list[float]
     main_aucs: list[float]
+    main_auc_stds: list[float]
     alt_aucs: list[float]
     alt_auc_stds: list[float]
 
@@ -106,7 +139,7 @@ class DataStore:
             ]
 
         self.x, self.y, self.hy, self.a, self.k, self.o, self.s, self.l = (
-            X,
+            X * PIXEL_MUL,
             y,
             hy,
             a,
@@ -145,10 +178,24 @@ def measure_dist(
     return measurements.mean(), measurements.std()
 
 
-def measure_main(model: CNNMO, X: NDArray, y: NDArray) -> float:
-    with torch.no_grad():
-        inp = torch.from_numpy(X).reshape((X.shape[0], 1, X.shape[1], X.shape[2]))
-        return roc_auc_score(y, model(inp).flatten())
+def measure_main(
+    model: CNNMO,
+    X: NDArray,
+    y: NDArray,
+    n: int = NN_MEASURE_DIST_REPEAT,
+) -> float:
+    measurements = np.zeros(n, dtype=np.double)
+
+    for i in range(n):
+        with torch.no_grad():
+            inp = torch.from_numpy(X).reshape((X.shape[0], 1, X.shape[1], X.shape[2]))
+            out = model(inp).flatten()
+            out += torch.normal(0, CNMMO_NOISE_STD, out.shape)
+            measurements[i] = roc_auc_score(y, out)
+
+    return measurements.mean(), measurements.std()
+
+    # return np.random.uniform(0.5, 1)
 
 
 def calc_corrs(
@@ -175,6 +222,7 @@ def round_list(l: list[float]) -> list[str]:
 def print_auc_table(
     human_aucs: list[float],
     main_aucs: list[float],
+    main_auc_stds: list[float],
     alt_aucs: list[float],
     alt_auc_stds: list[float],
     index_start: int = 1,
@@ -184,7 +232,8 @@ def print_auc_table(
     table.field_names = [
         "CFG",
         "Human",
-        "CNN-MO",
+        "CNN-MO (μ)",
+        "CNN-MO (σ)",
         ALT_MODEL_NAME + " (μ)",
         ALT_MODEL_NAME + " (σ)",
     ]
@@ -194,6 +243,7 @@ def print_auc_table(
                 range(index_start, len(human_aucs) + index_start),
                 round_list(human_aucs),
                 round_list(main_aucs),
+                round_list(main_auc_stds),
                 round_list(alt_aucs),
                 round_list(alt_auc_stds),
             )
@@ -214,20 +264,21 @@ def print_res_table(
 ) -> None:
     table = PrettyTable()
     table.set_style(TableStyle.MARKDOWN)
-    table.field_names = ["", "Pearson's ρ", "Δμ", "Adequacy"]
+    # table.field_names = ["", "Pearson's ρ", "Δμ", "Adequacy"]
+    table.field_names = ["", "Pearson's ρ", "Δμ"]
     table.add_rows(
         [
             [
                 MAIN_MODEL_NAME,
                 f"{main_p:.3f}",
                 f"{main_mse:.3f}",
-                f"__{main_adequacy:.3f}__",
+                # f"__{main_adequacy:.3f}__",
             ],
             [
                 ALT_MODEL_NAME,
                 f"{alt_p:.3f}",
                 f"{alt_mse:.3f}",
-                f"__{alt_adequacy:.3f}__",
+                # f"__{alt_adequacy:.3f}__",
             ],
         ],
         divider=True,
@@ -240,7 +291,9 @@ class ExperimentExecutor:
     def __init__(self) -> None:
         self.data = DataStore()
         self.main_model = load_main_model()
-        self.results = Results([], [], [], [])
+        self.alt_model = ALT_MODEL
+
+        self.results = Results([], [], [], [], [])
 
         self.kernel_soft = self.data.k
         self.small_objects = self.data.o
@@ -262,27 +315,15 @@ class ExperimentExecutor:
         kernel_f = self.kernel_soft if is_kernel_soft else self.kernel_standard
         shifted_f = self.shifted if shifted else self.not_shifted
 
-        alt_model = CHOArray(
-            CHOss(
-                channel_noise_std=CHOSS_NOISE_MUL,
-                test_stat_noise_std=CHOSS_T_NOISE_STD,
-                train_set_keep=CHOSS_TRAIN_SET_PART,
-            )
-            if CHOSS_ENABLED
-            else CHO(
-                channel_noise_std=CHO_NOISE_MUL,
-                test_stat_noise_std=CHO_T_NOISE_STD,
-                train_set_keep=CHO_TRAIN_SET_PART,
-            )
-        )
+        alt_model = CHOArray(self.alt_model)
 
         train_filter = np.logical_and(
-            self.kernel_standard if CHO_RESTRICTED else kernel_f,
+            self.kernel_standard if MO_RESTRICTED else kernel_f,
             np.logical_and(current_f, np.logical_and(object_size_f, shifted_f)),
         )
 
         alt_model.train(
-            self.data.x[train_filter] * PIXEL_MUL,
+            self.data.x[train_filter],
             self.data.y[train_filter],
             self.data.s[train_filter],
         )
@@ -292,7 +333,7 @@ class ExperimentExecutor:
             np.logical_and(np.logical_and(current_f, object_size_f), shifted_f),
         )
 
-        inp = self.data.x[ex_filter] * PIXEL_MUL
+        inp = self.data.x[ex_filter]
         gt = self.data.y[ex_filter]
         hy = self.data.hy[ex_filter]
         places = self.data.s[ex_filter] if isinstance(alt_model, CHOArray) else None
@@ -300,16 +341,66 @@ class ExperimentExecutor:
         assert inp.shape[0] == gt.shape[0] == hy.shape[0]
 
         human_auc = roc_auc_score(gt, hy)
-        main_auc = measure_main(self.main_model, inp, gt)
+        main_auc, main_auc_std = measure_main(self.main_model, inp, gt)
         alt_auc, alt_auc_std = measure_dist(alt_model, inp, gt, places=places)
 
         self.results.human_aucs.append(human_auc)
         self.results.main_aucs.append(main_auc)
+        self.results.main_auc_stds.append(main_auc_std)
         self.results.alt_aucs.append(alt_auc)
         self.results.alt_auc_stds.append(alt_auc_std)
 
 
+def tune():
+    ex = ExperimentExecutor()
+
+    with open(".temp/tuning.csv", "w") as tfile:
+        print(f"Tuning {ALT_MODEL_NAME_FULL}")
+        print("noise_std,r,md", file=tfile)
+        for noise_std in np.arange(0.95, 1.32, 0.01):
+            ex.results = Results([], [], [], [], [])
+            ex.alt_model.ch_noise_std = noise_std
+
+            # Configuration #1
+            ex.perform(
+                is_small_objects=True,
+                is_kernel_soft=False,
+                tube_current=10,
+            )
+
+            # Configuration #2
+            ex.perform(
+                is_small_objects=True,
+                is_kernel_soft=False,
+                tube_current=40,
+            )
+
+            # Configuration #3
+            ex.perform(
+                is_small_objects=False,
+                is_kernel_soft=False,
+                tube_current=10,
+            )
+
+            # Configuration #4
+            ex.perform(
+                is_small_objects=False,
+                is_kernel_soft=False,
+                tube_current=40,
+            )
+
+            ade_alt, alt_meandiff = adequacy_score(
+                ex.results.alt_aucs, ex.results.human_aucs
+            )
+            print(f"{noise_std:.4f},{ade_alt:.5f},{alt_meandiff:.3f}")
+            print(f"{noise_std:.4f},{ade_alt:.5f},{alt_meandiff:.3f}", file=tfile)
+
+
 def main():
+    if "tune" in argv:
+        tune()
+        exit()
+
     ex = ExperimentExecutor()
 
     print(f"# {MAIN_MODEL_NAME} vs {ALT_MODEL_NAME_FULL}")
@@ -347,7 +438,9 @@ def main():
     main_p, alt_p = calc_corrs(res.human_aucs, res.main_aucs, res.alt_aucs)
     ade_main, main_mse = adequacy_score(res.main_aucs, res.human_aucs)
     ade_alt, alt_mse = adequacy_score(res.alt_aucs, res.human_aucs)
-    print_auc_table(res.human_aucs, res.main_aucs, res.alt_aucs, res.alt_auc_stds)
+    print_auc_table(
+        res.human_aucs, res.main_aucs, res.main_auc_stds, res.alt_aucs, res.alt_auc_stds
+    )
     print("\n### Metrics\n")
     print_res_table(main_p, alt_p, main_mse, alt_mse, ade_main, ade_alt)
 
@@ -400,6 +493,7 @@ def main():
     print_auc_table(
         res.human_aucs[4:],
         res.main_aucs[4:],
+        res.main_auc_stds[4:],
         res.alt_aucs[4:],
         res.alt_auc_stds[4:],
         index_start=5,
@@ -422,6 +516,7 @@ def main():
     df["CFG"] = list(range(len(res.human_aucs)))
     df["Human"] = res.human_aucs
     df[MAIN_MODEL_NAME] = res.main_aucs
+    df[MAIN_MODEL_NAME + "_std"] = res.main_auc_stds
     df[ALT_MODEL_NAME_EXT] = res.alt_aucs
     df[ALT_MODEL_NAME_EXT + "_std"] = res.alt_auc_stds
     df.to_csv(OUTPUT_PATH, index=False)

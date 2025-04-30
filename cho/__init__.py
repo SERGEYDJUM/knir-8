@@ -1,3 +1,3 @@
-from .model import CHO, CHOChannelConfig, CHOss, CHOArray
+from .model import CHO, CHOChannelConfig, CHOss, CHOArray, NPWMF
 
-__all__ = ["CHO", "CHOChannelConfig", "CHOss", "CHOArray"]
+__all__ = ["CHO", "CHOChannelConfig", "CHOss", "CHOArray", "NPWMF"]

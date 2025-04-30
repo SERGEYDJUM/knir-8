@@ -1,6 +1,8 @@
 #Project
 .temp
 
+checkpoints/*.onnx
+
 dataset
 !dataset/.gitkeep
 !dataset/report.md

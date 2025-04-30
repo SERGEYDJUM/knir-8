@@ -6,6 +6,11 @@ import torch
 
 from labeling.labeling import rawread, load_dataset, DATASET_RAWS
 
+BLACKLISTED_CFGS = [
+    "cd7e0f84b35facac6a17c69a697754d2",
+    "94de7be616c1e06a7456341593426681",
+]
+
 
 class MyDataset(Dataset):
     def __init__(
@@ -21,6 +26,7 @@ class MyDataset(Dataset):
         df, _ = load_dataset()
         df = df[df["human_score"] != -1]
         df = df[df["recon_kernel"] == allowed_kernel]
+        df = df[~(df["xcist_cfg_md5"].isin(BLACKLISTED_CFGS))]
 
         raw_img_cache = dict()
 

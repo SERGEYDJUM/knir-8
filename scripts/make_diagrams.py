@@ -13,6 +13,7 @@ dfdiff = df.copy()
 dfdiff["CNN-MO"] -= df["Human"]
 dfdiff["CHOss"] -= df["Human"]
 dfdiff["CHO"] -= df["Human"]
+# dfdiff["NPWMF"] -= df["Human"]
 dfdiff["Human"] -= df["Human"]
 
 axes = sns.lineplot(
@@ -23,15 +24,16 @@ axes = sns.lineplot(
     label="Человек",
 )
 
-sns.lineplot(
+axes.errorbar(
     data=dfdiff,
     x="CFG",
     y="CNN-MO",
+    yerr="CNN-MO_std",
     marker="D",
     c="orange",
     linestyle=":",
+    capsize=4,
     label="CNN-MO",
-    ax=axes,
 )
 
 axes.errorbar(
@@ -52,11 +54,21 @@ axes.errorbar(
     fmt="s:r",
 )
 
-axes.set_ylabel("ΔAUC")
-axes.set_ylim(-0.4, 0.4)
+# axes.errorbar(
+#     data=dfdiff,
+#     x="CFG",
+#     y="NPWMF",
+#     yerr="NPWMF_std",
+#     capsize=4,
+#     fmt="s:m",
+# )
+
+axes.set_ylabel("Δ AUC")
+axes.set_ylim(-0.5, 0.5)
 axes.set_xticks(range(1, 11), labels=dfdiff["CFG"])
+axes.set_xlabel("Конфигурация")
 axes.axvline(4.5, c="black", linestyle="-.")
-axes.axvline(8.5, c="grey", linestyle="-.")
+axes.axvline(8.5, c="black", linestyle="-.")
 axes.legend(loc=1)
 axes.get_figure().savefig("dataset/fig1.png")
 

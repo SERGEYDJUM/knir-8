@@ -1,7 +1,8 @@
 from torch.optim.lr_scheduler import StepLR
 from torch.optim import Adadelta
 from sklearn.metrics import roc_auc_score
-from PIL import Image
+
+# from PIL import Image
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,8 +11,6 @@ import torch
 
 
 from .data_load import MyDataset
-
-_precision_record = 0
 
 
 class CNNMO(nn.Module):
@@ -128,7 +127,7 @@ class RNMO(nn.Module):
         return x
 
 
-def train(model, device, train_loader, optimizer, epoch):
+def train(model, device, train_loader, optimizer, epoch) -> float:
     model.train()
 
     loss_sum = 0
@@ -146,12 +145,16 @@ def train(model, device, train_loader, optimizer, epoch):
         loss_sum += loss.item()
         batches = max(batches, i)
 
-    print(f"Epoch {epoch+1}: \n\tAverage batch loss: {loss_sum/batches:.4f}")
+    avg_loss = loss_sum / batches
+    print(f"Epoch {epoch+1}: \n\tAverage batch loss: {avg_loss:.4f}")
+    return avg_loss
 
 
 def test(model, device, test_loader):
-    global _precision_record
     model.eval()
+
+    hauc = 0
+    test_loss = 0
 
     with torch.no_grad():
         for data, target, gt in test_loader:
@@ -163,6 +166,10 @@ def test(model, device, test_loader):
                 .mean()
             )
 
+            test_loss += F.binary_cross_entropy_with_logits(pred, target)
+
+            print(f"\tTest set loss: {test_loss:.5f}")
+
             print(f"\tTest set precision: {matched * 100:.2f}%")
 
             pred, target = pred.flatten().cpu(), target.cpu()
@@ -173,76 +180,47 @@ def test(model, device, test_loader):
             hauc = roc_auc_score(target, pred)
             print(f"\tTest ROC AUC as classifier: {hauc:.4f}")
 
-            _precision_record = max(hauc, _precision_record)
+    return test_loss, hauc
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="PyTorch Model Training")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--test-batch-size", type=int, default=10000)
+    parser.add_argument("--epochs", type=int, default=32)
+    parser.add_argument("--lr", type=float, default=1.0)
+    parser.add_argument("--gamma", type=float, default=0.995)
+    parser.add_argument("--no-cuda", action="store_true", default=False)
+    parser.add_argument("--dry-run", action="store_true", default=False)
+    parser.add_argument("--seed", type=int, default=157)
+    parser.add_argument("--save-model", action="store_true", default=False)
     parser.add_argument(
         "--rn",
         action="store_true",
         default=False,
-        help="train a ResNet",
+        help="train a ResNet instead (WIP)",
     )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=64,
-        metavar="N",
-        help="input batch size for training (default: 64)",
-    )
-    parser.add_argument(
-        "--test-batch-size",
-        type=int,
-        default=10000,
-        metavar="N",
-        help="input batch size for testing (default: 10000)",
-    )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=32,
-        metavar="N",
-        help="number of epochs to train (default: 10)",
-    )
-    parser.add_argument(
-        "--lr",
-        type=float,
-        default=1.0,
-        metavar="LR",
-        help="learning rate (default: 1.0)",
-    )
-    parser.add_argument(
-        "--gamma",
-        type=float,
-        default=0.99,
-        metavar="M",
-        help="Learning rate step gamma (default: 0.7)",
-    )
-    parser.add_argument(
-        "--no-cuda", action="store_true", default=False, help="disables CUDA training"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="quickly check a single pass",
-    )
-    parser.add_argument(
-        "--seed", type=int, default=1337, metavar="S", help="random seed (default: 1)"
-    )
-    parser.add_argument(
-        "--save-model",
-        action="store_true",
-        default=False,
-        help="For Saving the current Model",
-    )
-
     return parser.parse_args()
 
 
+def save_model(
+    model, path: str, export: bool = False, onnx_input: torch.Tensor | None = None
+) -> None:
+    torch.save(model.state_dict(), path)
+
+    if export:
+        torch.onnx.export(
+            model,
+            onnx_input,
+            path + ".onnx",
+            input_names=["input"],
+            output_names=["output"],
+            opset_version=20,
+            dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+        )
+
+
 def main():
-    global _precision_record
     args = parse_args()
 
     device = torch.device("cpu")
@@ -255,14 +233,14 @@ def main():
     torch.manual_seed(args.seed)
 
     train_loader = torch.utils.data.DataLoader(
-        MyDataset(train=True, random_state=args.seed, train_split=0.9),
+        MyDataset(train=True, random_state=args.seed, train_split=0.85),
         batch_size=args.batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
     )
 
     test_loader = torch.utils.data.DataLoader(
-        MyDataset(train=False, random_state=args.seed, train_split=0.9),
+        MyDataset(train=False, random_state=args.seed, train_split=0.85),
         batch_size=args.test_batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
@@ -274,21 +252,41 @@ def main():
     optimizer = Adadelta(model.parameters(), lr=args.lr)
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
 
-    for epoch in range(args.epochs):
-        train(model, device, train_loader, optimizer, epoch)
-        # test(model, device, test_loader)
-        scheduler.step()
+    model_basename = f"{'rn' if args.rn else 'cnn'}_mo"
 
-        print(f"\tLatest learning rate: {scheduler.get_last_lr()[0]:.4f}\n")
+    with open(".temp/train_losses.csv", "w") as trainlog:
+        print("epoch,lr,trainloss,testloss,testauc", file=trainlog)
 
-        if args.dry_run:
-            break
+        best_auc = 0
 
-    print(f"Best classifier test AUC: {_precision_record:.3f}")
+        for epoch in range(args.epochs):
+            trainloss = train(model, device, train_loader, optimizer, epoch)
+            testloss, testauc = test(model, device, test_loader)
+
+            scheduler.step()
+            lr = scheduler.get_last_lr()[0]
+
+            print(f"{epoch},{lr},{trainloss},{testloss},{testauc}", file=trainlog)
+            print(f"\tLatest learning rate: {lr:.4f}\n")
+
+            if args.dry_run:
+                break
+
+            if testauc >= best_auc:
+                best_auc = testauc
+                if args.save_model:
+                    save_model(model, f"checkpoints/{model_basename}_best.pt")
+
+        print(f"Best classifier test AUC: {best_auc:.3f}")
 
     if args.save_model:
-        torch.save(
-            model.state_dict(), f"checkpoints/{'rn' if args.rn else 'cnn'}_mo.pt"
+        save_model(
+            model,
+            f"checkpoints/{model_basename}.pt",
+            export=True,
+            onnx_input=test_loader.dataset[0][0][torch.newaxis, :, :, :].to(
+                device="cuda"
+            ),
         )
 
     # def save_img(tensor: torch.Tensor, path: str):
@@ -306,14 +304,3 @@ def main():
     # save_img(resres, ".temp/test_resres.png")
 
     # save_img(resres - testimg, ".temp/test_diff.png")
-
-    if args.save_model:
-        torch.onnx.export(
-            model,
-            test_loader.dataset[0][0][torch.newaxis, :, :, :].to(device="cuda"),
-            ".temp/model.onnx",
-            input_names=["input"],
-            output_names=["output"],
-            opset_version=20,
-            dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
-        )
