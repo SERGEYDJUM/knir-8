@@ -19,10 +19,10 @@ import torch
 ROI_R: int = 32
 PIXEL_MUL = 0.001
 
-MEASURE_DIST_REPEAT = 64
-NN_MEASURE_DIST_REPEAT = 64
+MEASURE_DIST_REPEAT = 128
+NN_MEASURE_DIST_REPEAT = 128
 
-CNNMO_CP_PATH: str = "checkpoints/cnn_mo_best.pt"
+CNNMO_CP_PATH: str = "checkpoints/cnn_mo.pt"
 CNMMO_NOISE_STD: float = 2.85
 
 RNMO_CP_PATH: str = "checkpoints/rn_mo.pt"
@@ -32,11 +32,11 @@ NPWMF_T_NOISE_STD = 0
 NPWMF_TRAIN_SET_PART = 1
 
 CHO_NOISE_MUL = 0.3
-CHO_T_NOISE_STD = 1
+CHO_T_NOISE_STD = 2
 CHO_TRAIN_SET_PART = 1
 
 CHOSS_NOISE_MUL = 0.85
-CHOSS_T_NOISE_STD = 1
+CHOSS_T_NOISE_STD = 1.3
 CHOSS_TRAIN_SET_PART = 1
 
 MO_RESTRICTED = "restrict" in argv
@@ -319,7 +319,10 @@ class ExperimentExecutor:
 
         train_filter = np.logical_and(
             self.kernel_standard if MO_RESTRICTED else kernel_f,
-            np.logical_and(current_f, np.logical_and(object_size_f, shifted_f)),
+            np.logical_and(
+                self.not_shifted if MO_RESTRICTED else shifted_f,
+                np.logical_and(object_size_f, current_f),
+            ),
         )
 
         alt_model.train(

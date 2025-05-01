@@ -194,6 +194,8 @@ def parse_args():
     parser.add_argument("--dry-run", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=157)
     parser.add_argument("--save-model", action="store_true", default=False)
+    parser.add_argument("--merge-sets", action="store_true", default=False)
+    parser.add_argument("--data-split", type=float, default=0.85)
     parser.add_argument(
         "--rn",
         action="store_true",
@@ -233,14 +235,18 @@ def main():
     torch.manual_seed(args.seed)
 
     train_loader = torch.utils.data.DataLoader(
-        MyDataset(train=True, random_state=args.seed, train_split=0.85),
+        MyDataset(
+            train=True,
+            random_state=args.seed,
+            train_split=1 if args.merge_sets else args.data_split,
+        ),
         batch_size=args.batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
     )
 
     test_loader = torch.utils.data.DataLoader(
-        MyDataset(train=False, random_state=args.seed, train_split=0.85),
+        MyDataset(train=False, random_state=args.seed, train_split=args.data_split),
         batch_size=args.test_batch_size,
         pin_memory=cuda_enabled,
         shuffle=True,
@@ -269,13 +275,10 @@ def main():
             print(f"{epoch},{lr},{trainloss},{testloss},{testauc}", file=trainlog)
             print(f"\tLatest learning rate: {lr:.4f}\n")
 
+            best_auc = max(testauc, best_auc)
+
             if args.dry_run:
                 break
-
-            if testauc >= best_auc:
-                best_auc = testauc
-                if args.save_model:
-                    save_model(model, f"checkpoints/{model_basename}_best.pt")
 
         print(f"Best classifier test AUC: {best_auc:.3f}")
 
