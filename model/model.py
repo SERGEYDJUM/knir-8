@@ -36,7 +36,7 @@ class CNNMO(nn.Module):
         self.conv_2 = nn.Conv2d(conv_1_chs, conv_2_chs, 3)
 
         # Perceptron
-        self.dropout_1 = nn.Dropout(0.1)
+        self.dropout_1 = nn.Dropout(0.5)
         self.lin_1 = nn.Linear(conv_2_chs * ((input_size // 2 - 2) ** 2), lin_2_neurons)
         self.dropout_2 = nn.Dropout(0.5)
         self.lin_2 = nn.Linear(lin_2_neurons, 1)
