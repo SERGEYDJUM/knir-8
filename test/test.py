@@ -52,21 +52,21 @@ ALT_MODEL_NAME_FULL = None
 if "npwmf" in argv:
     ALT_MODEL_NAME = "NPWMF"
     ALT_MODEL = NPWMF(
-        test_stat_noise_std=NPWMF_T_NOISE_STD,
+        teststat_noise_std=NPWMF_T_NOISE_STD,
         train_set_keep=NPWMF_TRAIN_SET_PART,
     )
 elif "cho" in argv:
     ALT_MODEL_NAME = "CHO"
     ALT_MODEL = CHO(
-        channel_noise_std=CHO_NOISE_MUL,
-        test_stat_noise_std=CHO_T_NOISE_STD,
+        channel_noise_mul=CHO_NOISE_MUL,
+        teststat_noise_std=CHO_T_NOISE_STD,
         train_set_keep=CHO_TRAIN_SET_PART,
     )
 else:
     ALT_MODEL_NAME = "CHOss"
     ALT_MODEL = CHOss(
-        channel_noise_std=CHOSS_NOISE_MUL,
-        test_stat_noise_std=CHOSS_T_NOISE_STD,
+        channel_noise_mul=CHOSS_NOISE_MUL,
+        teststat_noise_std=CHOSS_T_NOISE_STD,
         train_set_keep=CHOSS_TRAIN_SET_PART,
     )
 
@@ -293,7 +293,7 @@ def tune():
         print("noise_std,r,md", file=tfile)
         for noise_std in np.arange(0.95, 1.32, 0.01):
             ex.results = Results([], [], [], [], [])
-            ex.alt_model.ch_noise_std = noise_std
+            ex.alt_model.ch_noise_mul = noise_std
 
             ex.perform(
                 is_small_objects=True,

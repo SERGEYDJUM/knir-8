@@ -1,16 +1,15 @@
 from torch.optim.lr_scheduler import StepLR
 from torch.optim import Adadelta
 from sklearn.metrics import roc_auc_score
+from .data_load import MyDataset
+import argparse
+
 
 # from PIL import Image
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
-import argparse
 import torch
-
-
-from .data_load import MyDataset
 
 
 class CNNMO(nn.Module):

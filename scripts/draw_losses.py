@@ -1,15 +1,16 @@
 from pandas import DataFrame, read_csv
+from sys import argv
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import seaborn as sns
 import numpy as np
 
 sns.set_theme()
-plt.figure(figsize=(16, 9))
-df = read_csv(".temp/tuning.csv")
+# plt.figure(figsize=(16, 9))
+# df = read_csv(".temp/tuning.csv")
 
-axes = sns.lineplot(x=df["noise_std"], y=df["r"].rolling(7).apply(np.mean))
-axes.get_figure().savefig(".temp/tuning.png")
+# axes = sns.lineplot(x=df["noise_std"], y=df["r"].rolling(7).apply(np.mean))
+# axes.get_figure().savefig(".temp/tuning.png")
 
 plt.figure(figsize=(16, 9))
 df = read_csv(".temp/train_losses.csv")
@@ -56,3 +57,6 @@ axes.set_ylim(0, 1)
 axes.set_ylabel("Значение")
 axes.set_xlabel("Эпоха")
 axes.get_figure().savefig(".temp/train_losses.png")
+
+if "inter" in argv:
+    plt.show()
