@@ -1,5 +1,7 @@
 from os import system, name, path
 from labeling.labeling import rawread, load_dataset, DATASET_RAWS
+from sklearn.metrics import RocCurveDisplay, roc_curve, auc
+from matplotlib import pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 
@@ -81,3 +83,11 @@ def clear_console() -> None:
 
 def round_list(l: list[float]) -> list[str]:
     return list(map(lambda x: f"{round(x, 3):.3f}", l))
+
+
+def draw_roc(x: NDArray, y: NDArray) -> None:
+    fpr, tpr, thresholds = roc_curve(y, x)
+    roc_auc = auc(fpr, tpr)
+    display = RocCurveDisplay(fpr=fpr, tpr=tpr, roc_auc=roc_auc, estimator_name="ROC")
+    display.plot()
+    plt.show()

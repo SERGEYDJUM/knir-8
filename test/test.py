@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pandas import read_csv, DataFrame
 from tqdm import tqdm
 
-from .utils import DataStore, round_list, clear_console
+from .utils import DataStore, round_list, clear_console, draw_roc
 
 import numpy as np
 import torch
@@ -29,15 +29,12 @@ RNMO_CP_PATH: str = "checkpoints/rn_mo.pt"
 OUTPUT_PATH: str = "dataset/metrics.csv"
 
 NPWMF_T_NOISE_STD = 0
-NPWMF_TRAIN_SET_PART = 1
 
 CHO_NOISE_MUL = 0.3
 CHO_T_NOISE_STD = 2
-CHO_TRAIN_SET_PART = 1
 
 CHOSS_NOISE_MUL = 0.85
 CHOSS_T_NOISE_STD = 1.3
-CHOSS_TRAIN_SET_PART = 1
 
 MO_RESTRICTED = "restrict" in argv
 
@@ -53,21 +50,18 @@ if "npwmf" in argv:
     ALT_MODEL_NAME = "NPWMF"
     ALT_MODEL = NPWMF(
         teststat_noise_std=NPWMF_T_NOISE_STD,
-        train_set_keep=NPWMF_TRAIN_SET_PART,
     )
 elif "cho" in argv:
     ALT_MODEL_NAME = "CHO"
     ALT_MODEL = CHO(
         channel_noise_mul=CHO_NOISE_MUL,
         teststat_noise_std=CHO_T_NOISE_STD,
-        train_set_keep=CHO_TRAIN_SET_PART,
     )
 else:
     ALT_MODEL_NAME = "CHOss"
     ALT_MODEL = CHOss(
         channel_noise_mul=CHOSS_NOISE_MUL,
         teststat_noise_std=CHOSS_T_NOISE_STD,
-        train_set_keep=CHOSS_TRAIN_SET_PART,
     )
 
 
@@ -182,6 +176,7 @@ def measure_main(
             inp = torch.from_numpy(X).reshape((X.shape[0], 1, X.shape[1], X.shape[2]))
             out = model(inp).flatten()
             out += torch.normal(0, CNMMO_NOISE_STD, out.shape)
+            draw_roc(out, y)
             measurements[i] = roc_auc_score(y, out)
 
     return measurements.mean(), measurements.std()
