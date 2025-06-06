@@ -176,7 +176,7 @@ def measure_main(
             inp = torch.from_numpy(X).reshape((X.shape[0], 1, X.shape[1], X.shape[2]))
             out = model(inp).flatten()
             out += torch.normal(0, CNMMO_NOISE_STD, out.shape)
-            draw_roc(out, y)
+            # draw_roc(out, y)
             measurements[i] = roc_auc_score(y, out)
 
     return measurements.mean(), measurements.std()
